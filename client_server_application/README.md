@@ -1,4 +1,4 @@
-# clietn_server_application
+# client_server_application
 
 A new Flutter project.
 
