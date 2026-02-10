@@ -69,9 +69,12 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   late final List<Widget> _pages = [
-    _CounterPage(counterGetter: () => _counter),
-    const Center(child: Text('Search')),
-    const Center(child: Text('Profile')),
+    DevicePage(
+      counter: _counter,
+      onIncrement: _incrementCounter,
+    ),
+    const PluginsPage(),
+    const ProfilePage(),
   ];
 
 
@@ -104,7 +107,7 @@ class _MyHomePageState extends State<MyHomePage> {
         items: const 
       [BottomNavigationBarItem(
         icon: Icon(Icons.device_hub),
-        label: 'CounterDemo',
+        label: 'Devices',
         ),
         BottomNavigationBarItem(
         icon: Icon(Icons.search),
@@ -114,20 +117,20 @@ class _MyHomePageState extends State<MyHomePage> {
         icon: Icon(Icons.people),
         label: 'Profile',
         ),
-        ]),
-      floatingActionButton: _currentIndex == 0 ? FloatingActionButton(
-      onPressed: _incrementCounter,
-      tooltip: 'Increment',
-      child: const Icon(Icons.add)
-      ): null,
+        ])
     );
   }
 }
 
-class _CounterPage extends StatelessWidget {
-  final int Function() counterGetter;
+class DevicePage extends StatelessWidget {
+  final int counter;
+  final VoidCallback onIncrement;
 
-  const _CounterPage({required this.counterGetter});
+  const DevicePage({
+    super.key,
+    required this.counter,
+    required this.onIncrement,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -137,11 +140,33 @@ class _CounterPage extends StatelessWidget {
         children: [
           const Text('You have pushed the button this many times:'),
           Text(
-            '${counterGetter()}',
+            '$counter',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
         ],
       ),
+    );
+  }
+}
+
+class PluginsPage extends StatelessWidget {
+  const PluginsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text('Plugins page'),
+    );
+  }
+}
+
+class ProfilePage extends StatelessWidget {
+  const ProfilePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text('Profile page'),
     );
   }
 }
