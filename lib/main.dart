@@ -60,14 +60,20 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
-  final _random = Random();
-
+  int _currentIndex = 0;
 
   void _incrementCounter() {
     setState(() {
-      _counter += _random.nextInt(10) + 1;
+      _counter++;
     });
   }
+
+  late final List<Widget> _pages = [
+    _CounterPage(counterGetter: () => _counter),
+    const Center(child: Text('Search')),
+    const Center(child: Text('Profile')),
+  ];
+
 
   @override
   Widget build(BuildContext context) {
@@ -87,37 +93,54 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+      body:  _pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+         setState(() {
+           _currentIndex = index;
+        });
+       },
+        items: const 
+      [BottomNavigationBarItem(
+        icon: Icon(Icons.device_hub),
+        label: 'CounterDemo',
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+        BottomNavigationBarItem(
+        icon: Icon(Icons.search),
+        label: 'Plugins',
+        ),
+        BottomNavigationBarItem(
+        icon: Icon(Icons.people),
+        label: 'Profile',
+        ),
+        ]),
+      floatingActionButton: _currentIndex == 0 ? FloatingActionButton(
+      onPressed: _incrementCounter,
+      tooltip: 'Increment',
+      child: const Icon(Icons.add)
+      ): null,
+    );
+  }
+}
+
+class _CounterPage extends StatelessWidget {
+  final int Function() counterGetter;
+
+  const _CounterPage({required this.counterGetter});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('You have pushed the button this many times:'),
+          Text(
+            '${counterGetter()}',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+        ],
       ),
     );
   }
