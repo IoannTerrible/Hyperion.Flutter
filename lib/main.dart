@@ -1,5 +1,8 @@
 //import 'dart:nativewrappers/_internal/vm/lib/math_patch.dart';
 
+import 'package:clietn_server_application/device_page.dart';
+import 'package:clietn_server_application/plugins_page.dart';
+import 'package:clietn_server_application/profile_page.dart';
 import 'package:flutter/material.dart';
 
 import 'dart:math';
@@ -106,11 +109,11 @@ class _MyHomePageState extends State<MyHomePage> {
        },
         items: const 
       [BottomNavigationBarItem(
-        icon: Icon(Icons.device_hub),
+        icon: Icon(Icons.devices),
         label: 'Devices',
         ),
         BottomNavigationBarItem(
-        icon: Icon(Icons.search),
+        icon: Icon(Icons.extension),
         label: 'Plugins',
         ),
         BottomNavigationBarItem(
@@ -118,55 +121,6 @@ class _MyHomePageState extends State<MyHomePage> {
         label: 'Profile',
         ),
         ])
-    );
-  }
-}
-
-class DevicePage extends StatelessWidget {
-  final int counter;
-  final VoidCallback onIncrement;
-
-  const DevicePage({
-    super.key,
-    required this.counter,
-    required this.onIncrement,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('You have pushed the button this many times:'),
-          Text(
-            '$counter',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class PluginsPage extends StatelessWidget {
-  const PluginsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Plugins page'),
-    );
-  }
-}
-
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Profile page'),
     );
   }
 }
