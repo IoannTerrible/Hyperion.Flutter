@@ -1,3 +1,5 @@
+import 'package:clietn_server_application/app_theme.dart';
+import 'package:clietn_server_application/base_page.dart';
 import 'package:flutter/material.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -5,201 +7,114 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Variable Mapping from CSS
-    const Color bgStart = Color(0xFFF3F4F6);
-    const Color bgEnd = Color(0xFFF7C8D3);
-    const Color textColor = Color(0xFF333333);
-    const Color textColorSecondary = Color(0xFF757575); // Fixed opacity color
-    const Color headerBg = Color(0xFF333333);
-    const Color headerText = Colors.white;
-    const Color accentStrong = Color(0xFFB33B63);
-    const Color panelBg = Color(0xE6FFFFFF); // rgba(255, 255, 255, 0.9)
-    const double panelRadius = 16.0;
-
-    return Scaffold(
-      backgroundColor: bgStart,
-      appBar: AppBar(
-        backgroundColor: headerBg,
-        elevation: 0,
-        title: const Text(
-          'PROFILE',
-          style: TextStyle(
-            color: headerText,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.5,
-            fontSize: 14,
-          ),
-        ),
-      ),
-      body: Container(
-        // Background Gradient
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [bgStart, bgEnd],
-          ),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
+    return BasePage(
+      child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Column(
             children: [
-              const SizedBox(height: 20),
-              
-              // User Identity Section
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 45,
-                backgroundColor: headerBg,
-                child: Icon(Icons.person, size: 45, color: Colors.white),
+                backgroundColor: AppTheme.profileAvatarBg,
+                child: Icon(
+                  Icons.person_outline,
+                  size: 48,
+                  color: AppTheme.profileAvatarIcon,
+                ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Admin User',
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Text(
+              Text(
                 'admin@hyperion.local',
-                style: TextStyle(
-                  color: textColorSecondary,
-                  fontSize: 14,
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-
-              const SizedBox(height: 40),
-
-              // Sessions Panel
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8, bottom: 8),
-                  child: Text(
-                    'ACTIVE SESSIONS',
-                    style: TextStyle(
-                      color: accentStrong,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ),
-              ),
-
-              // The Rounded Panel
+              const SizedBox(height: 32),
               Container(
                 decoration: BoxDecoration(
-                  color: panelBg,
-                  borderRadius: BorderRadius.circular(panelRadius),
+                  color: AppTheme.profileCard,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                 ),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _buildSessionItem(
-                      icon: Icons.smartphone,
-                      title: 'iPhone 15 Pro',
-                      subtitle: 'London, UK • Active now',
-                      isLast: false,
-                      accent: accentStrong,
-                      text: textColor,
-                      subText: textColorSecondary,
+                    const Text(
+                      'Activity sessions',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    _buildSessionItem(
-                      icon: Icons.desktop_windows,
-                      title: 'Workstation Desktop',
-                      subtitle: 'Berlin, DE • 2 hours ago',
-                      isLast: true,
-                      accent: accentStrong,
-                      text: textColor,
-                      subText: textColorSecondary,
+                    const SizedBox(height: 12),
+                    _SessionItem(
+                      icon: Icons.smartphone_outlined,
+                      label: 'iPhone 14 Pro · today',
+                    ),
+                    const SizedBox(height: 10),
+                    _SessionItem(
+                      icon: Icons.desktop_windows_outlined,
+                      label: 'Gaming PC · tomorrow',
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.profileAccentRed,
+                          foregroundColor: AppTheme.textPrimary,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusButton),
+                          ),
+                        ),
+                        child: const Text('Logout'),
+                      ),
                     ),
                   ],
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // Logout Button with the same Panel Radius
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: headerBg,
-                    foregroundColor: headerText,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(panelRadius),
-                    ),
-                  ),
-                  child: const Text(
-                    'LOGOUT',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2,
-                    ),
-                  ),
                 ),
               ),
             ],
           ),
         ),
-      ),
     );
   }
+}
 
-  Widget _buildSessionItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool isLast,
-    required Color accent,
-    required Color text,
-    required Color subText,
-  }) {
+class _SessionItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _SessionItem({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        border: isLast 
-          ? null 
-          : Border(bottom: BorderSide(color: text.withOpacity(0.05))),
+        color: AppTheme.sessionItemBackground,
+        borderRadius: BorderRadius.circular(AppTheme.radiusItem),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: accent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: accent, size: 20),
-          ),
-          const SizedBox(width: 16),
+          Icon(icon, color: AppTheme.textPrimary, size: 22),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: text,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: subText,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 15,
+              ),
             ),
           ),
-          Icon(Icons.arrow_forward_ios, size: 12, color: subText),
         ],
       ),
     );

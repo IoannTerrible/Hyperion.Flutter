@@ -1,5 +1,6 @@
 //import 'dart:nativewrappers/_internal/vm/lib/math_patch.dart';
 
+import 'package:clietn_server_application/app_theme.dart';
 import 'package:clietn_server_application/device_page.dart';
 import 'package:clietn_server_application/plugins_page.dart';
 import 'package:clietn_server_application/profile_page.dart';
@@ -62,65 +63,70 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
   int _currentIndex = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
-
-  late final List<Widget> _pages = [
-    DevicePage(
-      counter: _counter,
-      onIncrement: _incrementCounter,
-    ),
-    const PluginsPage(),
-    const ProfilePage(),
+  late final List<Widget> _pages = const [
+    DevicePage(),
+    PluginsPage(),
+    ProfilePage(),
   ];
 
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        backgroundColor: AppTheme.surface,
+        foregroundColor: AppTheme.textPrimary,
+        title: Text(
+          _currentIndex == 0
+              ? 'Devices'
+              : (_currentIndex == 1 ? 'Plugins' : 'Profile'),
+          style: TextStyle(
+            color: _currentIndex == 1
+                ? AppTheme.textSecondary
+                : AppTheme.textPrimary,
+            fontSize: _currentIndex == 1 ? 14 : 20,
+            fontWeight: _currentIndex == 1 ? FontWeight.w400 : FontWeight.w600,
+          ),
+        ),
       ),
-      body:  _pages[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-         setState(() {
-           _currentIndex = index;
-        });
-       },
-        items: const 
-      [BottomNavigationBarItem(
-        icon: Icon(Icons.devices),
-        label: 'Devices',
+      backgroundColor: AppTheme.background,
+      body: _pages[_currentIndex],
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+          ),
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() => _currentIndex = index);
+            },
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            selectedItemColor: AppTheme.textPrimary,
+            unselectedItemColor: AppTheme.textPrimary.withOpacity(0.7),
+            type: BottomNavigationBarType.fixed,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.devices),
+                label: 'Devices',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.cloud_circle),
+                label: 'Plugins',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline),
+                label: 'Profile',
+              ),
+            ],
+          ),
         ),
-        BottomNavigationBarItem(
-        icon: Icon(Icons.extension),
-        label: 'Plugins',
-        ),
-        BottomNavigationBarItem(
-        icon: Icon(Icons.people),
-        label: 'Profile',
-        ),
-        ])
+      ),
     );
   }
 }
