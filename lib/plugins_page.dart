@@ -1,4 +1,5 @@
 import 'package:clietn_server_application/app_theme.dart';
+import 'package:clietn_server_application/base_page.dart';
 import 'package:flutter/material.dart';
 
 class PluginsPage extends StatefulWidget {
@@ -15,84 +16,70 @@ class _PluginsPageState extends State<PluginsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return BasePage(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
             child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.pluginsCard,
-                    borderRadius:
-                        BorderRadius.circular(AppTheme.radiusPluginsCard),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.chevron_left,
-                              color: AppTheme.textPrimary,
-                              size: 28,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Main Instance',
-                              style: TextStyle(
-                                color: AppTheme.textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.chevron_left,
+                          color: AppTheme.textPrimary,
+                          size: 28,
                         ),
-                      ),
-                      Divider(
-                        height: 1,
-                        color: AppTheme.textSecondary.withOpacity(0.3),
-                        thickness: 1,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          children: [
-                            _PluginTile(
-                              icon: Icons.tv,
-                              name: 'Netflix',
-                              enabled: _netflixEnabled,
-                              onChanged: (v) =>
-                                  setState(() => _netflixEnabled = v),
-                            ),
-                            const SizedBox(height: 10),
-                            _PluginTile(
-                              icon: Icons.volume_up,
-                              name: 'Audio Controller',
-                              enabled: _audioControllerEnabled,
-                              onChanged: (v) =>
-                                  setState(() => _audioControllerEnabled = v),
-                            ),
-                            const SizedBox(height: 10),
-                            _PluginTile(
-                              icon: Icons.touch_app,
-                              name: 'Touch Mapper',
-                              enabled: _touchMapperEnabled,
-                              onChanged: (v) =>
-                                  setState(() => _touchMapperEnabled = v),
-                            ),
-                          ],
+                        const SizedBox(width: 4),
+                        Text(
+                          'Main Instance',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                  Divider(
+                    height: 1,
+                    color: AppTheme.textSecondary.withOpacity(0.3),
+                    thickness: 1,
+                  ),
+                  const SizedBox(height: 12),
+                  _PluginTile(
+                    icon: Icons.tv,
+                    name: 'Netflix',
+                    enabled: _netflixEnabled,
+                    onChanged: (v) =>
+                        setState(() => _netflixEnabled = v),
+                  ),
+                  const SizedBox(height: 10),
+                  _PluginTile(
+                    icon: Icons.volume_up,
+                    name: 'Audio Controller',
+                    enabled: _audioControllerEnabled,
+                    onChanged: (v) =>
+                        setState(() => _audioControllerEnabled = v),
+                  ),
+                  const SizedBox(height: 10),
+                  _PluginTile(
+                    icon: Icons.touch_app,
+                    name: 'Touch Mapper',
+                    enabled: _touchMapperEnabled,
+                    onChanged: (v) =>
+                        setState(() => _touchMapperEnabled = v),
+                  ),
+                ],
               ),
             ),
-          ],
+      )],
         ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:clietn_server_application/app_theme.dart';
+import 'package:clietn_server_application/base_page.dart';
 import 'package:flutter/material.dart';
 
 class DevicePage extends StatelessWidget {
@@ -6,81 +7,88 @@ class DevicePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return BasePage(
       child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.devicesCard,
-              borderRadius:
-                  BorderRadius.circular(AppTheme.radiusPluginsCard),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.chevron_left,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.chevron_left,
+                    color: AppTheme.textPrimary,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Devices',
+                      style: TextStyle(
                         color: AppTheme.textPrimary,
-                        size: 28,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Devices',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                Divider(
-                  height: 1,
-                  color: AppTheme.textSecondary.withOpacity(0.3),
-                  thickness: 1,
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _DeviceCard(
-                        icon: Icons.smartphone_outlined,
-                        name: 'iPhone 14',
-                        status: DeviceStatus.online,
-                        instances: const [
-                          _InstanceInfo(name: 'Main Instance', status: InstanceStatus.running),
-                          _InstanceInfo(name: 'Test Instance', status: InstanceStatus.stopped),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      _DeviceCard(
-                        icon: Icons.desktop_windows_outlined,
-                        name: 'Gaming PC',
-                        status: DeviceStatus.offline,
-                        instances: null,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+            Divider(
+              height: 1,
+              color: AppTheme.textSecondary.withOpacity(0.3),
+              thickness: 1,
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.devicesCard,
+                borderRadius: BorderRadius.circular(AppTheme.radiusPluginsCard),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: _DeviceCard(
+                icon: Icons.smartphone_outlined,
+                name: 'iPhone 14',
+                status: DeviceStatus.online,
+                instances: const [
+                  _InstanceInfo(name: 'Main Instance', status: InstanceStatus.running),
+                  _InstanceInfo(name: 'Test Instance', status: InstanceStatus.stopped),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.devicesCard,
+                borderRadius: BorderRadius.circular(AppTheme.radiusPluginsCard),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: _DeviceCard(
+                icon: Icons.desktop_windows_outlined,
+                name: 'Gaming PC',
+                status: DeviceStatus.offline,
+                instances: null,
+              ),
+            ),
+          ],
         ),
+      ),
     );
   }
 }

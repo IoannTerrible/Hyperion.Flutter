@@ -43,6 +43,16 @@ class AppTheme {
   static const Color profileAccentRed = Color(0xFFE74C3C);
   /// Иконка внутри аватара.
   static const Color profileAvatarIcon = Color(0xFFE0E0E0);
+  /// Ссылки (Sign Up, Continue as demo). Светло-синий акцент.
+  static const Color accentLink = Color(0xFF7B9FD7);
+  /// Фон полей ввода (светлый на тёмном экране).
+  static const Color inputBackground = Color(0xFFFFFFFF);
+  /// Текст/плейсхолдер в полях ввода.
+  static const Color inputText = Color(0xFF4A4A4A);
+  /// Граница поля ввода.
+  static const Color inputBorder = Color(0xFF6C6C73);
+  /// Основная кнопка (Sign in).
+  static const Color buttonPrimary = Color(0xFF2A2A4A);
 
   // ----- Обратная совместимость: все экраны используют background/surface -----
   static const Color profileBackground = background;

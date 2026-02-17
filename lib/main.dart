@@ -1,6 +1,9 @@
 //import 'dart:nativewrappers/_internal/vm/lib/math_patch.dart';
 
 import 'package:clietn_server_application/app_theme.dart';
+import 'package:clietn_server_application/auth/auth_notifier.dart';
+import 'package:clietn_server_application/auth/auth_scope.dart';
+import 'package:clietn_server_application/auth/real_auth_service.dart';
 import 'package:clietn_server_application/device_page.dart';
 import 'package:clietn_server_application/plugins_page.dart';
 import 'package:clietn_server_application/profile_page.dart';
@@ -8,37 +11,36 @@ import 'package:flutter/material.dart';
 
 import 'dart:math';
 
-void main() {
-  runApp(const MyApp());
+const String _kAuthBaseUrl = 'https://localhost:7204';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  late final AuthNotifier authNotifier;
+  final authService = RealAuthService(
+    baseUrl: _kAuthBaseUrl,
+    onStateChanged: (state) => authNotifier.replaceState(state),
+  );
+  authNotifier = AuthNotifier(authService);
+  await authNotifier.restoreSession();
+  runApp(MyApp(authNotifier: authNotifier));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.authNotifier});
 
-  // This widget is the root of your application.
+  final AuthNotifier authNotifier;
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
+    return AuthScope(
+      notifier: authNotifier,
+      child: MaterialApp(
+        title: 'Flutter Demo',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
+        ),
+        home: const AuthGate(authenticatedChild: MyHomePage(title: 'Home')),
       ),
-      home: MyHomePage(title: 'Home page'),
     );
   }
 }
@@ -106,7 +108,7 @@ class _MyHomePageState extends State<MyHomePage> {
               setState(() => _currentIndex = index);
             },
             backgroundColor: Colors.transparent,
-            elevation: 0,
+            elevation: 12,
             selectedItemColor: AppTheme.textPrimary,
             unselectedItemColor: AppTheme.textPrimary.withOpacity(0.7),
             type: BottomNavigationBarType.fixed,
