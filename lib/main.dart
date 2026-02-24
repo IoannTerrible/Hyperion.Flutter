@@ -1,17 +1,15 @@
-//import 'dart:nativewrappers/_internal/vm/lib/math_patch.dart';
-
 import 'package:clietn_server_application/app_theme.dart';
 import 'package:clietn_server_application/auth/auth_notifier.dart';
 import 'package:clietn_server_application/auth/auth_scope.dart';
 import 'package:clietn_server_application/auth/real_auth_service.dart';
 import 'package:clietn_server_application/device_page.dart';
+import 'package:clietn_server_application/devices/devices_service.dart';
 import 'package:clietn_server_application/plugins_page.dart';
 import 'package:clietn_server_application/profile_page.dart';
 import 'package:flutter/material.dart';
 
-import 'dart:math';
-
 const String _kAuthBaseUrl = 'https://localhost:7204';
+const String _kDevicesApiBaseUrl = 'https://localhost:7264';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,13 +20,18 @@ void main() async {
   );
   authNotifier = AuthNotifier(authService);
   await authNotifier.restoreSession();
-  runApp(MyApp(authNotifier: authNotifier));
+  final devicesService = DevicesService(
+    baseUrl: _kDevicesApiBaseUrl,
+    authNotifier: authNotifier,
+  );
+  runApp(MyApp(authNotifier: authNotifier, devicesService: devicesService));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.authNotifier});
+  const MyApp({super.key, required this.authNotifier, required this.devicesService});
 
   final AuthNotifier authNotifier;
+  final DevicesService devicesService;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +42,10 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
         ),
-        home: const AuthGate(authenticatedChild: MyHomePage(title: 'Home')),
+        home: AuthGate(
+          authenticatedChild: MyHomePage(title: 'Home'),
+          devicesService: devicesService,
+        ),
       ),
     );
   }
@@ -66,16 +72,29 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _currentIndex = 0;
+  String? _scrollToInstanceId;
 
-  late final List<Widget> _pages = const [
-    DevicePage(),
-    PluginsPage(),
-    ProfilePage(),
-  ];
+  void _onInstanceTap(String instanceId) {
+    setState(() {
+      _scrollToInstanceId = instanceId;
+      _currentIndex = 1;
+    });
+  }
 
+  void _onPluginsScrollDone() {
+    setState(() => _scrollToInstanceId = null);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      DevicePage(onInstanceTap: _onInstanceTap),
+      PluginsPage(
+        scrollToInstanceId: _scrollToInstanceId,
+        onScrollDone: _onPluginsScrollDone,
+      ),
+      const ProfilePage(),
+    ];
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
@@ -94,7 +113,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
       backgroundColor: AppTheme.background,
-      body: _pages[_currentIndex],
+      body: pages[_currentIndex],
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Container(

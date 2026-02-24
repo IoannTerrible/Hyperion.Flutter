@@ -2,7 +2,26 @@ import 'package:clietn_server_application/app_theme.dart';
 import 'package:clietn_server_application/auth/auth_scope.dart';
 import 'package:clietn_server_application/auth/auth_state.dart';
 import 'package:clietn_server_application/base_page.dart';
+import 'package:clietn_server_application/devices/devices_api.dart';
+import 'package:clietn_server_application/devices/devices_scope.dart';
 import 'package:flutter/material.dart';
+
+IconData _sessionIcon(String? icon) {
+  switch (icon) {
+    case 'smartphone':
+      return Icons.smartphone_outlined;
+    case 'desktop':
+      return Icons.desktop_windows_outlined;
+    default:
+      return Icons.devices_other;
+  }
+}
+
+String _sessionLabel(Session s) {
+  final last = s.lastSeen ?? s.lastSeenAt ?? '';
+  if (last.isEmpty) return s.name;
+  return '${s.name} · $last';
+}
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -14,6 +33,7 @@ class ProfilePage extends StatelessWidget {
       builder: (context, _) {
         final state = AuthScope.of(context).state;
         final email = state is Authenticated ? state.email : '—';
+        final sessionsFuture = DevicesScope.of(context).getSessions();
         return BasePage(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -55,14 +75,48 @@ class ProfilePage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _SessionItem(
-                        icon: Icons.smartphone_outlined,
-                        label: 'iPhone 14 Pro · today',
-                      ),
-                      const SizedBox(height: 10),
-                      _SessionItem(
-                        icon: Icons.desktop_windows_outlined,
-                        label: 'Gaming PC · tomorrow',
+                      FutureBuilder<List<Session>>(
+                        future: sessionsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(
+                                  child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))),
+                            );
+                          }
+                          if (snapshot.hasError) {
+                            debugPrint('[ProfilePage] Error: ${snapshot.error}');
+                            debugPrint('[ProfilePage] StackTrace: ${snapshot.stackTrace}');
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                snapshot.error.toString(),
+                                style: const TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 13),
+                              ),
+                            );
+                          }
+                          final sessions = snapshot.data ?? [];
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (var i = 0; i < sessions.length; i++) ...[
+                                if (i > 0) const SizedBox(height: 10),
+                                _SessionItem(
+                                  icon: _sessionIcon(sessions[i].icon),
+                                  label: _sessionLabel(sessions[i]),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
                       SizedBox(

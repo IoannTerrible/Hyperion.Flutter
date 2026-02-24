@@ -23,13 +23,13 @@ class RealAuthService implements AuthService {
     required this.onStateChanged,
   });
 
-  void _saveAuth(AuthenticationResult result) {
+  Future<void> _saveAuth(AuthenticationResult result) async {
     final token = result.token;
     if (token != null && token.isNotEmpty) {
-      _storage.write(key: _keyToken, value: token);
-      if (result.userId != null) _storage.write(key: _keyUserId, value: result.userId);
-      if (result.email != null) _storage.write(key: _keyEmail, value: result.email);
-      if (result.username != null) _storage.write(key: _keyUsername, value: result.username);
+      await _storage.write(key: _keyToken, value: token);
+      if (result.userId != null) await _storage.write(key: _keyUserId, value: result.userId);
+      if (result.email != null) await _storage.write(key: _keyEmail, value: result.email);
+      if (result.username != null) await _storage.write(key: _keyUsername, value: result.username);
     }
   }
 
@@ -52,7 +52,7 @@ class RealAuthService implements AuthService {
     if (!result.isValid || result.token == null) {
       throw AuthApiException(result.errorMessage ?? 'Invalid credentials');
     }
-    _saveAuth(result);
+    await _saveAuth(result);
     final email = result.email ?? result.user?.email ?? '';
     _notifyAuthenticated(
       email: email.isNotEmpty ? email : 'user',
@@ -72,7 +72,7 @@ class RealAuthService implements AuthService {
     if (!result.isValid || result.token == null) {
       throw AuthApiException(result.errorMessage ?? 'Registration failed');
     }
-    _saveAuth(result);
+    await _saveAuth(result);
     final resolvedEmail = result.email ?? result.user?.email ?? email;
     _notifyAuthenticated(
       email: resolvedEmail,
