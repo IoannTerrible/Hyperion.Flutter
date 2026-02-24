@@ -13,7 +13,7 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   bool _obscurePassword = true;
-  final _emailController = TextEditingController(text: 'admin@hyperion.local');
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   @override
@@ -267,9 +267,11 @@ class _AuthPageState extends State<AuthPage> {
         );
       },
     ).whenComplete(() {
-      usernameController.dispose();
-      emailController.dispose();
-      passwordController.dispose();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        usernameController.dispose();
+        emailController.dispose();
+        passwordController.dispose();
+      });
     });
   }
 
