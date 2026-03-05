@@ -93,4 +93,24 @@ class DevicesService {
     debugPrint('[DevicesService] getSessions: calling API');
     return api.getSessions(_client, baseUrl, token);
   }
+
+  /// Toggle plugin enabled state. In demo mode: no-op (local state only).
+  Future<void> patchPluginEnabled(
+    String instanceId,
+    String pluginId,
+    bool enabled,
+  ) async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated || state.isDemo) return;
+    final token = await _authNotifier.getToken();
+    if (token == null || token.isEmpty) return;
+    await api.patchPluginEnabled(
+      _client,
+      baseUrl,
+      token,
+      instanceId,
+      pluginId,
+      enabled,
+    );
+  }
 }

@@ -32,15 +32,63 @@ class PluginsPage extends StatefulWidget {
 }
 
 class _PluginsPageState extends State<PluginsPage> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _scrollContentKey = GlobalKey();
   final Map<String, GlobalKey> _sectionKeys = {};
   final Map<String, bool> _pluginOverrides = {};
 
-  bool _enabled(Plugin plugin) {
-    return _pluginOverrides[plugin.id] ?? plugin.enabled;
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  void _setEnabled(String pluginId, bool value) {
-    setState(() => _pluginOverrides[pluginId] = value);
+  bool _enabled(Plugin plugin, String instanceId) {
+    final key = '${instanceId}_${plugin.id}';
+    return _pluginOverrides[key] ?? plugin.enabled;
+  }
+
+  Future<void> _setEnabled(
+    String instanceId,
+    String pluginId,
+    bool value,
+  ) async {
+    try {
+      await DevicesScope.of(context).patchPluginEnabled(
+        instanceId,
+        pluginId,
+        value,
+      );
+      final key = '${instanceId}_$pluginId';
+      setState(() => _pluginOverrides[key] = value);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
+  void _scrollToSection(String instanceId) {
+    widget.onScrollDone?.call();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      final sectionKey = _sectionKeys[instanceId];
+      final ctx = sectionKey?.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final context = sectionKey?.currentContext;
+        if (context == null || !context.mounted) return;
+        Scrollable.ensureVisible(
+          context,
+          alignment: 0.0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      });
+    });
   }
 
   @override
@@ -79,16 +127,7 @@ class _PluginsPageState extends State<PluginsPage> {
           final scrollToId = widget.scrollToInstanceId;
           if (scrollToId != null && _sectionKeys.containsKey(scrollToId)) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              final key = _sectionKeys[scrollToId];
-              final ctx = key?.currentContext;
-              if (ctx != null) {
-                Scrollable.ensureVisible(
-                  ctx,
-                  alignment: 0.1,
-                  duration: const Duration(milliseconds: 300),
-                );
-              }
-              widget.onScrollDone?.call();
+              _scrollToSection(scrollToId);
             });
           }
 
@@ -97,13 +136,16 @@ class _PluginsPageState extends State<PluginsPage> {
             children: [
               Expanded(
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                   child: Column(
+                    key: _scrollContentKey,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final instance in instances) ...[
-                        KeyedSubtree(
+                        ColoredBox(
                           key: _sectionKeys[instance.id],
+                          color: Colors.transparent,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -138,8 +180,9 @@ class _PluginsPageState extends State<PluginsPage> {
                                 _PluginTile(
                                   icon: _pluginIcon(plugin.icon),
                                   name: plugin.name,
-                                  enabled: _enabled(plugin),
-                                  onChanged: (v) => _setEnabled(plugin.id, v),
+                                  enabled: _enabled(plugin, instance.id),
+                                  onChanged: (v) =>
+                                      _setEnabled(instance.id, plugin.id, v),
                                 ),
                                 const SizedBox(height: 10),
                               ],

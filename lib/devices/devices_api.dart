@@ -164,6 +164,32 @@ Future<List<Session>> getSessions(
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
+/// PATCH /api/instances/{instanceId}/plugins/{pluginId} — body { "enabled": true|false }
+Future<void> patchPluginEnabled(
+  http.Client client,
+  String baseUrl,
+  String token,
+  String instanceId,
+  String pluginId,
+  bool enabled,
+) async {
+  final uri = Uri.parse('$baseUrl/api/instances/$instanceId/plugins/$pluginId');
+  final response = await client.patch(
+    uri,
+    headers: {
+      'Content-Type': 'application/json',
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+    body: jsonEncode({'enabled': enabled}),
+  );
+  if (response.statusCode >= 200 && response.statusCode < 300) return;
+  final message = problemDetailsDetail(response.body);
+  debugPrint('[devices_api] PATCH $uri -> ${response.statusCode}');
+  debugPrint('[devices_api] Response body: ${response.body}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
 class DevicesApiException implements Exception {
   final String message;
   final int? statusCode;

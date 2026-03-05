@@ -7,12 +7,18 @@ import 'package:http/http.dart' as http;
 class LoginRequest {
   final String usernameOrEmail;
   final String password;
+  final String deviceType;
 
-  LoginRequest({required this.usernameOrEmail, required this.password});
+  LoginRequest({
+    required this.usernameOrEmail,
+    required this.password,
+    this.deviceType = 'Phone',
+  });
 
   Map<String, dynamic> toJson() => {
         'usernameOrEmail': usernameOrEmail,
         'password': password,
+        'deviceType': deviceType,
       };
 }
 
@@ -20,17 +26,20 @@ class RegisterRequest {
   final String username;
   final String email;
   final String password;
+  final String firstRegistrationChannel;
 
   RegisterRequest({
     required this.username,
     required this.email,
     required this.password,
+    this.firstRegistrationChannel = 'Phone',
   });
 
   Map<String, dynamic> toJson() => {
         'username': username,
         'email': email,
         'password': password,
+        'firstRegistrationChannel': firstRegistrationChannel,
       };
 }
 
