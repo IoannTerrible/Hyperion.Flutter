@@ -2,6 +2,7 @@ import 'package:clietn_server_application/app_theme.dart';
 import 'package:clietn_server_application/base_page.dart';
 import 'package:clietn_server_application/devices/devices_api.dart';
 import 'package:clietn_server_application/devices/devices_scope.dart';
+import 'package:clietn_server_application/widgets/error_with_retry.dart';
 import 'package:flutter/material.dart';
 
 IconData _pluginIcon(String? icon) {
@@ -91,12 +92,15 @@ class _PluginsPageState extends State<PluginsPage> {
     });
   }
 
+  Future<List<Device>>? _devicesFuture;
+
   @override
   Widget build(BuildContext context) {
     final service = DevicesScope.of(context);
+    _devicesFuture ??= service.getDevices();
     return BasePage(
       child: FutureBuilder<List<Device>>(
-        future: service.getDevices(),
+        future: _devicesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -105,13 +109,10 @@ class _PluginsPageState extends State<PluginsPage> {
             debugPrint('[PluginsPage] Error: ${snapshot.error}');
             debugPrint('[PluginsPage] StackTrace: ${snapshot.stackTrace}');
             return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  snapshot.error.toString(),
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                  textAlign: TextAlign.center,
-                ),
+              child: ErrorWithRetry(
+                message: snapshot.error.toString(),
+                onRetry: () =>
+                    setState(() => _devicesFuture = service.getDevices()),
               ),
             );
           }

@@ -51,6 +51,9 @@ class AuthNotifier extends ChangeNotifier {
     } on AuthApiException catch (e) {
       _lastError = e.message;
       notifyListeners();
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
+      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -65,6 +68,9 @@ class AuthNotifier extends ChangeNotifier {
       await _service.register(username, email, password);
     } on AuthApiException catch (e) {
       _lastError = e.message;
+      notifyListeners();
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
       notifyListeners();
     } finally {
       _isLoading = false;
@@ -90,4 +96,16 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   Future<String?> getToken() => _service.getToken();
+
+  static String _toUserFriendlyError(Object e) {
+    final s = e.toString();
+    if (s.contains('SocketException') ||
+        s.contains('ClientException') ||
+        s.contains('Connection') ||
+        s.contains('Connection refused') ||
+        s.contains('сетевое подключение')) {
+      return 'Connection failed. Please check your network and try again.';
+    }
+    return s;
+  }
 }

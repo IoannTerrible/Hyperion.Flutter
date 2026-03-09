@@ -4,6 +4,7 @@ import 'package:clietn_server_application/auth/auth_state.dart';
 import 'package:clietn_server_application/base_page.dart';
 import 'package:clietn_server_application/devices/devices_api.dart';
 import 'package:clietn_server_application/devices/devices_scope.dart';
+import 'package:clietn_server_application/widgets/error_with_retry.dart';
 import 'package:flutter/material.dart';
 
 IconData _sessionIcon(String? icon) {
@@ -33,7 +34,6 @@ class ProfilePage extends StatelessWidget {
       builder: (context, _) {
         final state = AuthScope.of(context).state;
         final email = state is Authenticated ? state.email : '—';
-        final sessionsFuture = DevicesScope.of(context).getSessions();
         return BasePage(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -75,49 +75,7 @@ class ProfilePage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      FutureBuilder<List<Session>>(
-                        future: sessionsFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Center(
-                                  child: SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2))),
-                            );
-                          }
-                          if (snapshot.hasError) {
-                            debugPrint('[ProfilePage] Error: ${snapshot.error}');
-                            debugPrint('[ProfilePage] StackTrace: ${snapshot.stackTrace}');
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                snapshot.error.toString(),
-                                style: const TextStyle(
-                                    color: AppTheme.textSecondary,
-                                    fontSize: 13),
-                              ),
-                            );
-                          }
-                          final sessions = snapshot.data ?? [];
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (var i = 0; i < sessions.length; i++) ...[
-                                if (i > 0) const SizedBox(height: 10),
-                                _SessionItem(
-                                  icon: _sessionIcon(sessions[i].icon),
-                                  label: _sessionLabel(sessions[i]),
-                                ),
-                              ],
-                            ],
-                          );
-                        },
-                      ),
+                      const _SessionsBlock(),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -142,6 +100,63 @@ class ProfilePage extends StatelessWidget {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+class _SessionsBlock extends StatefulWidget {
+  const _SessionsBlock();
+
+  @override
+  State<_SessionsBlock> createState() => _SessionsBlockState();
+}
+
+class _SessionsBlockState extends State<_SessionsBlock> {
+  Future<List<Session>>? _sessionsFuture;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = DevicesScope.of(context);
+    _sessionsFuture ??= service.getSessions();
+    return FutureBuilder<List<Session>>(
+      future: _sessionsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          debugPrint('[ProfilePage] Error: ${snapshot.error}');
+          debugPrint('[ProfilePage] StackTrace: ${snapshot.stackTrace}');
+          return ErrorWithRetry(
+            message: snapshot.error.toString(),
+            onRetry: () =>
+                setState(() => _sessionsFuture = service.getSessions()),
+            compact: true,
+          );
+        }
+        final sessions = snapshot.data ?? [];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < sessions.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _SessionItem(
+                icon: _sessionIcon(sessions[i].icon),
+                label: _sessionLabel(sessions[i]),
+              ),
+            ],
+          ],
         );
       },
     );

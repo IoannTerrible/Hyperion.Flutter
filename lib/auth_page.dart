@@ -13,8 +13,33 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   bool _obscurePassword = true;
+  String? _lastShownError;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  void _showErrorSnackBarIfNeeded(String? lastError) {
+    if (lastError == null) {
+      _lastShownError = null;
+      return;
+    }
+    if (lastError == _lastShownError) return;
+    _lastShownError = lastError;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            lastError,
+            style: const TextStyle(color: AppTheme.textPrimary),
+          ),
+          backgroundColor: AppTheme.surface,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    });
+  }
 
   @override
   void dispose() {
@@ -61,17 +86,12 @@ class _AuthPageState extends State<AuthPage> {
                     _buildEmailField(),
                     const SizedBox(height: 16),
                     _buildPasswordField(),
-                    if (lastError != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        lastError,
-                        style: TextStyle(
-                          color: AppTheme.statusOffline,
-                          fontSize: 14,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                    Builder(
+                      builder: (_) {
+                        _showErrorSnackBarIfNeeded(lastError);
+                        return const SizedBox.shrink();
+                      },
+                    ),
                     const SizedBox(height: 24),
                     _buildSignInButton(isLoading),
                     const SizedBox(height: 16),
