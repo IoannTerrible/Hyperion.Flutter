@@ -41,6 +41,8 @@ class AppTheme {
   static const Color pluginsDisabledDot = Color(0xFFFFB700);
   /// Кнопка Logout. Figma: semantic/destructive.
   static const Color profileAccentRed = Color(0xFFE74C3C);
+  /// Фон SnackBar для ошибок (тёмно-красный).
+  static const Color snackbarErrorBackground = Color(0xFF8B3A3A);
   /// Иконка внутри аватара.
   static const Color profileAvatarIcon = Color(0xFFE0E0E0);
   /// Ссылки (Sign Up, Continue as demo). Светло-синий акцент.

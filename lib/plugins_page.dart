@@ -50,6 +50,7 @@ class _PluginsPageState extends State<PluginsPage> {
   }
 
   Future<void> _setEnabled(
+    String? deviceId,
     String instanceId,
     String pluginId,
     bool value,
@@ -59,13 +60,21 @@ class _PluginsPageState extends State<PluginsPage> {
         instanceId,
         pluginId,
         value,
+        deviceId: deviceId,
       );
       final key = '${instanceId}_$pluginId';
       setState(() => _pluginOverrides[key] = value);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(
+            content: Text(
+              e.toString(),
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
+            backgroundColor: AppTheme.snackbarErrorBackground,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -117,12 +126,16 @@ class _PluginsPageState extends State<PluginsPage> {
             );
           }
           final devices = snapshot.data ?? [];
-          final instances = <Instance>[];
+          final instanceEntries = <({Device device, Instance instance})>[];
           for (final d in devices) {
-            if (d.instances != null) instances.addAll(d.instances!);
+            if (d.instances != null) {
+              for (final inst in d.instances!) {
+                instanceEntries.add((device: d, instance: inst));
+              }
+            }
           }
-          for (final inst in instances) {
-            _sectionKeys.putIfAbsent(inst.id, () => GlobalKey());
+          for (final e in instanceEntries) {
+            _sectionKeys.putIfAbsent(e.instance.id, () => GlobalKey());
           }
 
           final scrollToId = widget.scrollToInstanceId;
@@ -143,9 +156,9 @@ class _PluginsPageState extends State<PluginsPage> {
                     key: _scrollContentKey,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final instance in instances) ...[
+                      for (final entry in instanceEntries) ...[
                         ColoredBox(
-                          key: _sectionKeys[instance.id],
+                          key: _sectionKeys[entry.instance.id],
                           color: Colors.transparent,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -161,7 +174,7 @@ class _PluginsPageState extends State<PluginsPage> {
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      instance.name,
+                                      entry.instance.name,
                                       style: TextStyle(
                                         color: AppTheme.textPrimary,
                                         fontSize: 18,
@@ -177,17 +190,21 @@ class _PluginsPageState extends State<PluginsPage> {
                                 thickness: 1,
                               ),
                               const SizedBox(height: 12),
-                              for (final plugin in instance.plugins) ...[
+                              for (final plugin in entry.instance.plugins) ...[
                                 _PluginTile(
                                   icon: _pluginIcon(plugin.icon),
                                   name: plugin.name,
-                                  enabled: _enabled(plugin, instance.id),
-                                  onChanged: (v) =>
-                                      _setEnabled(instance.id, plugin.id, v),
+                                  enabled: _enabled(plugin, entry.instance.id),
+                                  onChanged: (v) => _setEnabled(
+                                    entry.device.id,
+                                    entry.instance.id,
+                                    plugin.id,
+                                    v,
+                                  ),
                                 ),
                                 const SizedBox(height: 10),
                               ],
-                              if (instance.plugins.isEmpty)
+                              if (entry.instance.plugins.isEmpty)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                   child: Text(

@@ -32,7 +32,7 @@ class _AuthPageState extends State<AuthPage> {
             lastError,
             style: const TextStyle(color: AppTheme.textPrimary),
           ),
-          backgroundColor: AppTheme.surface,
+          backgroundColor: AppTheme.snackbarErrorBackground,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 5),
           margin: const EdgeInsets.all(16),

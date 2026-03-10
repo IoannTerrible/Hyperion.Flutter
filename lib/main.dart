@@ -11,17 +11,22 @@ import 'package:flutter/material.dart';
 const String _kAuthBaseUrl = 'https://localhost:7204';
 const String _kDevicesApiBaseUrl = 'https://localhost:7264';
 
+String _httpFallback(String url) =>
+    url.startsWith('https:') ? 'http:${url.substring(6)}' : url;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   late final AuthNotifier authNotifier;
   final authService = RealAuthService(
     baseUrl: _kAuthBaseUrl,
+    fallbackBaseUrl: _httpFallback(_kAuthBaseUrl),
     onStateChanged: (state) => authNotifier.replaceState(state),
   );
   authNotifier = AuthNotifier(authService);
   await authNotifier.restoreSession();
   final devicesService = DevicesService(
     baseUrl: _kDevicesApiBaseUrl,
+    fallbackBaseUrl: _httpFallback(_kDevicesApiBaseUrl),
     authNotifier: authNotifier,
   );
   runApp(MyApp(authNotifier: authNotifier, devicesService: devicesService));

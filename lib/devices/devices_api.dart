@@ -164,16 +164,21 @@ Future<List<Session>> getSessions(
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
-/// PATCH /api/instances/{instanceId}/plugins/{pluginId} — body { "enabled": true|false }
+/// PATCH /api/devices/{deviceId}/instances/{instanceId}/plugins/{pluginId}
+/// Falls back to /api/instances/{instanceId}/plugins/{pluginId} if deviceId is null.
 Future<void> patchPluginEnabled(
   http.Client client,
   String baseUrl,
   String token,
   String instanceId,
   String pluginId,
-  bool enabled,
-) async {
-  final uri = Uri.parse('$baseUrl/api/instances/$instanceId/plugins/$pluginId');
+  bool enabled, {
+  String? deviceId,
+}) async {
+  final String path = deviceId != null
+      ? '/api/devices/$deviceId/instances/$instanceId/plugins/$pluginId'
+      : '/api/instances/$instanceId/plugins/$pluginId';
+  final uri = Uri.parse('$baseUrl$path');
   final response = await client.patch(
     uri,
     headers: {

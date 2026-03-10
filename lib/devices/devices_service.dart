@@ -45,14 +45,26 @@ List<api.Session> get stubSessions => [
       const api.Session(deviceId: 'dev-2', name: 'Gaming PC', icon: 'desktop', lastSeen: 'tomorrow'),
     ];
 
+bool _isConnectionOrTlsError(Object e) {
+  final s = e.toString().toLowerCase();
+  return s.contains('wrong version') ||
+      s.contains('handshake') ||
+      s.contains('socketexception') ||
+      s.contains('clientexception') ||
+      s.contains('connection refused') ||
+      s.contains('сетевое подключение');
+}
+
 /// Delivers devices and sessions: with token → API; demo → stubs.
 class DevicesService {
   final http.Client _client = http.Client();
   final String baseUrl;
+  final String fallbackBaseUrl;
   final AuthNotifier _authNotifier;
 
   DevicesService({
     required this.baseUrl,
+    required this.fallbackBaseUrl,
     required AuthNotifier authNotifier,
   }) : _authNotifier = authNotifier;
 
@@ -72,7 +84,14 @@ class DevicesService {
       return stubDevices;
     }
     debugPrint('[DevicesService] getDevices: calling API');
-    return api.getDevices(_client, baseUrl, token);
+    try {
+      return await api.getDevices(_client, baseUrl, token);
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await api.getDevices(_client, fallbackBaseUrl, token);
+      }
+      rethrow;
+    }
   }
 
   Future<List<api.Session>> getSessions() async {
@@ -91,26 +110,51 @@ class DevicesService {
       return stubSessions;
     }
     debugPrint('[DevicesService] getSessions: calling API');
-    return api.getSessions(_client, baseUrl, token);
+    try {
+      return await api.getSessions(_client, baseUrl, token);
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await api.getSessions(_client, fallbackBaseUrl, token);
+      }
+      rethrow;
+    }
   }
 
   /// Toggle plugin enabled state. In demo mode: no-op (local state only).
   Future<void> patchPluginEnabled(
     String instanceId,
     String pluginId,
-    bool enabled,
-  ) async {
+    bool enabled, {
+    String? deviceId,
+  }) async {
     final state = _authNotifier.state;
     if (state is! Authenticated || state.isDemo) return;
     final token = await _authNotifier.getToken();
     if (token == null || token.isEmpty) return;
-    await api.patchPluginEnabled(
-      _client,
-      baseUrl,
-      token,
-      instanceId,
-      pluginId,
-      enabled,
-    );
+    try {
+      await api.patchPluginEnabled(
+        _client,
+        baseUrl,
+        token,
+        instanceId,
+        pluginId,
+        enabled,
+        deviceId: deviceId,
+      );
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        await api.patchPluginEnabled(
+          _client,
+          fallbackBaseUrl,
+          token,
+          instanceId,
+          pluginId,
+          enabled,
+          deviceId: deviceId,
+        );
+      } else {
+        rethrow;
+      }
+    }
   }
 }

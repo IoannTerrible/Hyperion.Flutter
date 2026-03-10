@@ -9,9 +9,20 @@ const _keyUserId = 'auth_user_id';
 const _keyEmail = 'auth_email';
 const _keyUsername = 'auth_username';
 
+bool _isConnectionOrTlsError(Object e) {
+  final s = e.toString().toLowerCase();
+  return s.contains('wrong version') ||
+      s.contains('handshake') ||
+      s.contains('socketexception') ||
+      s.contains('clientexception') ||
+      s.contains('connection refused') ||
+      s.contains('сетевое подключение');
+}
+
 /// Real auth implementation: HTTP + secure storage, demo without HTTP.
 class RealAuthService implements AuthService {
   final String baseUrl;
+  final String fallbackBaseUrl;
   final void Function(AuthState) onStateChanged;
   final http.Client _client = http.Client();
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
@@ -20,6 +31,7 @@ class RealAuthService implements AuthService {
 
   RealAuthService({
     required this.baseUrl,
+    required this.fallbackBaseUrl,
     required this.onStateChanged,
   });
 
@@ -44,11 +56,17 @@ class RealAuthService implements AuthService {
 
   @override
   Future<void> signIn(String usernameOrEmail, String password) async {
-    final result = await postLogin(
-      _client,
-      baseUrl,
-      LoginRequest(usernameOrEmail: usernameOrEmail, password: password),
-    );
+    final request = LoginRequest(usernameOrEmail: usernameOrEmail, password: password);
+    AuthenticationResult result;
+    try {
+      result = await postLogin(_client, baseUrl, request);
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        result = await postLogin(_client, fallbackBaseUrl, request);
+      } else {
+        rethrow;
+      }
+    }
     if (!result.isValid || result.token == null) {
       throw AuthApiException(result.errorMessage ?? 'Invalid credentials');
     }
@@ -64,11 +82,17 @@ class RealAuthService implements AuthService {
 
   @override
   Future<void> register(String username, String email, String password) async {
-    final result = await postRegister(
-      _client,
-      baseUrl,
-      RegisterRequest(username: username, email: email, password: password),
-    );
+    final request = RegisterRequest(username: username, email: email, password: password);
+    AuthenticationResult result;
+    try {
+      result = await postRegister(_client, baseUrl, request);
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        result = await postRegister(_client, fallbackBaseUrl, request);
+      } else {
+        rethrow;
+      }
+    }
     if (!result.isValid || result.token == null) {
       throw AuthApiException(result.errorMessage ?? 'Registration failed');
     }
@@ -107,11 +131,17 @@ class RealAuthService implements AuthService {
     if (token == null || token.isEmpty) return;
 
     try {
-      final result = await postValidateToken(
-        _client,
-        baseUrl,
-        ValidateTokenRequest(token: token),
-      );
+      final request = ValidateTokenRequest(token: token);
+      AuthenticationResult result;
+      try {
+        result = await postValidateToken(_client, baseUrl, request);
+      } catch (e) {
+        if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+          result = await postValidateToken(_client, fallbackBaseUrl, request);
+        } else {
+          rethrow;
+        }
+      }
       if (!result.isValid) {
         await signOut();
         return;
