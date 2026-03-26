@@ -1,48 +1,30 @@
 import 'package:clietn_server_application/auth/auth_notifier.dart';
 import 'package:clietn_server_application/auth/auth_state.dart';
 import 'package:clietn_server_application/devices/devices_api.dart' as api;
-import 'package:flutter/foundation.dart';
+import 'package:clietn_server_application/logging/app_logger.dart';
 import 'package:http/http.dart' as http;
 
-/// Stub devices (same structure as plan A.1) for demo mode.
+/// Stub devices for demo mode.
 List<api.Device> get stubDevices => [
       const api.Device(
         id: 'dev-1',
-        name: 'iPhone 14',
+        name: 'Demo Device',
         status: 'Online',
         icon: 'smartphone',
-        instances: [
-          api.Instance(
-            id: 'inst-1',
-            name: 'Main Instance',
-            status: 'Running',
-            plugins: [
-              api.Plugin(id: 'p1', name: 'Netflix', enabled: true, icon: 'tv'),
-              api.Plugin(id: 'p2', name: 'Audio Controller', enabled: false, icon: 'volume_up'),
-              api.Plugin(id: 'p3', name: 'Touch Mapper', enabled: true, icon: 'touch_app'),
-            ],
-          ),
-          api.Instance(
-            id: 'inst-2',
-            name: 'Test Instance',
-            status: 'Stopped',
-            plugins: [],
-          ),
-        ],
-      ),
-      const api.Device(
-        id: 'dev-2',
-        name: 'Gaming PC',
-        status: 'Offline',
-        icon: 'desktop',
         instances: null,
       ),
     ];
 
-/// Stub sessions (same structure as plan A.2) for demo mode.
+/// Stub sessions for demo mode.
 List<api.Session> get stubSessions => [
-      const api.Session(deviceId: 'dev-1', name: 'iPhone 14 Pro', icon: 'smartphone', lastSeen: 'today'),
-      const api.Session(deviceId: 'dev-2', name: 'Gaming PC', icon: 'desktop', lastSeen: 'tomorrow'),
+      const api.Session(id: 'stub-1', name: 'Mobile Device', icon: 'smartphone'),
+      const api.Session(id: 'stub-2', name: 'Desktop', icon: 'desktop_windows'),
+    ];
+
+/// Stub plugin catalog for demo mode.
+List<api.Plugin> get stubPluginCatalog => const [
+      api.Plugin(id: '44424700-0000-4000-8000-000000000007', name: 'Debug Info', enabled: false, icon: 'bug_report'),
+      api.Plugin(id: '43550000-0000-4000-8000-000000000008', name: 'Compact UI', enabled: false, icon: 'view_compact'),
     ];
 
 bool _isConnectionOrTlsError(Object e) {
@@ -55,7 +37,7 @@ bool _isConnectionOrTlsError(Object e) {
       s.contains('сетевое подключение');
 }
 
-/// Delivers devices and sessions: with token → API; demo → stubs.
+/// Delivers devices, sessions and plugin catalog: with token → API; demo → stubs.
 class DevicesService {
   final http.Client _client = http.Client();
   final String baseUrl;
@@ -68,24 +50,73 @@ class DevicesService {
     required AuthNotifier authNotifier,
   }) : _authNotifier = authNotifier;
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  Future<String?> _getValidToken() => _authNotifier.getToken();
+
+  Future<String?> _refreshAndGetToken() async {
+    final ok = await _authNotifier.tryRefreshSession();
+    if (!ok) {
+      await _authNotifier.signOut();
+      return null;
+    }
+    return _authNotifier.getToken();
+  }
+
+  // ── Device registration ────────────────────────────────────────────────────
+
+  /// Register or update this device on the backend. Idempotent — safe to call on every login.
+  Future<void> registerDevice(String deviceId, String name) async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated || state.isDemo) return;
+    final token = await _getValidToken();
+    if (token == null || token.isEmpty) return;
+    final request = api.RegisterDeviceRequest(
+      deviceId: deviceId,
+      name: name,
+      deviceType: 'Phone',
+    );
+    AppLogger.log('[DevicesService] registerDevice: $deviceId "$name"');
+    try {
+      await api.registerDevice(_client, baseUrl, token, request);
+      AppLogger.log('[DevicesService] registerDevice: success');
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        await api.registerDevice(_client, fallbackBaseUrl, token, request);
+      }
+      // Best-effort — registration failure is non-fatal
+    }
+  }
+
+  // ── Devices ────────────────────────────────────────────────────────────────
+
   Future<List<api.Device>> getDevices() async {
     final state = _authNotifier.state;
     if (state is! Authenticated) {
-      debugPrint('[DevicesService] getDevices: not authenticated -> stubs');
+      AppLogger.log('[DevicesService] getDevices: not authenticated -> stubs');
       return stubDevices;
     }
     if (state.isDemo) {
-      debugPrint('[DevicesService] getDevices: demo mode -> stubs');
+      AppLogger.log('[DevicesService] getDevices: demo mode -> stubs');
       return stubDevices;
     }
-    final token = await _authNotifier.getToken();
+    final token = await _getValidToken();
     if (token == null || token.isEmpty) {
-      debugPrint('[DevicesService] getDevices: no token -> stubs');
+      AppLogger.log('[DevicesService] getDevices: no token -> stubs');
       return stubDevices;
     }
-    debugPrint('[DevicesService] getDevices: calling API');
+    AppLogger.log('[DevicesService] getDevices: calling API');
     try {
       return await api.getDevices(_client, baseUrl, token);
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        AppLogger.log('[DevicesService] getDevices: 401 -> try refresh');
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          return await api.getDevices(_client, baseUrl, newToken);
+        }
+      }
+      rethrow;
     } catch (e) {
       if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         return await api.getDevices(_client, fallbackBaseUrl, token);
@@ -94,24 +125,91 @@ class DevicesService {
     }
   }
 
+  /// Delete a device by its ID.
+  Future<void> deleteDevice(String deviceId) async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated || state.isDemo) return;
+    final token = await _getValidToken();
+    if (token == null || token.isEmpty) return;
+    try {
+      await api.deleteDevice(_client, baseUrl, token, deviceId);
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          await api.deleteDevice(_client, baseUrl, newToken, deviceId);
+          return;
+        }
+      }
+      rethrow;
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        await api.deleteDevice(_client, fallbackBaseUrl, token, deviceId);
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  // ── Plugin catalog ─────────────────────────────────────────────────────────
+
+  /// Returns the full plugin catalog. `enabled` is always false in catalog responses —
+  /// actual enabled state for mobile is stored locally in PluginSettings.
+  Future<List<api.Plugin>> getPluginCatalog() async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated) return stubPluginCatalog;
+    if (state.isDemo) return stubPluginCatalog;
+    final token = await _getValidToken();
+    if (token == null || token.isEmpty) return stubPluginCatalog;
+    AppLogger.log('[DevicesService] getPluginCatalog: calling API');
+    try {
+      return await api.getPluginCatalog(_client, baseUrl, token);
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        AppLogger.log('[DevicesService] getPluginCatalog: 401 -> try refresh');
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          return await api.getPluginCatalog(_client, baseUrl, newToken);
+        }
+      }
+      rethrow;
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await api.getPluginCatalog(_client, fallbackBaseUrl, token);
+      }
+      rethrow;
+    }
+  }
+
+  // ── Sessions ───────────────────────────────────────────────────────────────
+
   Future<List<api.Session>> getSessions() async {
     final state = _authNotifier.state;
     if (state is! Authenticated) {
-      debugPrint('[DevicesService] getSessions: not authenticated -> stubs');
+      AppLogger.log('[DevicesService] getSessions: not authenticated -> stubs');
       return stubSessions;
     }
     if (state.isDemo) {
-      debugPrint('[DevicesService] getSessions: demo mode -> stubs');
+      AppLogger.log('[DevicesService] getSessions: demo mode -> stubs');
       return stubSessions;
     }
-    final token = await _authNotifier.getToken();
+    final token = await _getValidToken();
     if (token == null || token.isEmpty) {
-      debugPrint('[DevicesService] getSessions: no token -> stubs');
+      AppLogger.log('[DevicesService] getSessions: no token -> stubs');
       return stubSessions;
     }
-    debugPrint('[DevicesService] getSessions: calling API');
+    AppLogger.log('[DevicesService] getSessions: calling API');
     try {
       return await api.getSessions(_client, baseUrl, token);
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        AppLogger.log('[DevicesService] getSessions: 401 -> try refresh');
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          return await api.getSessions(_client, baseUrl, newToken);
+        }
+      }
+      rethrow;
     } catch (e) {
       if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         return await api.getSessions(_client, fallbackBaseUrl, token);
@@ -120,7 +218,26 @@ class DevicesService {
     }
   }
 
-  /// Toggle plugin enabled state. In demo mode: no-op (local state only).
+  /// Revoke a specific session by its refresh token ID.
+  Future<void> revokeSession(String sessionId) async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated || state.isDemo) return;
+    final token = await _getValidToken();
+    if (token == null || token.isEmpty) return;
+    try {
+      await api.deleteSession(_client, baseUrl, token, sessionId);
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        await api.deleteSession(_client, fallbackBaseUrl, token, sessionId);
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  // ── Instance plugins (desktop) ─────────────────────────────────────────────
+
+  /// Toggle plugin enabled state on a desktop instance.
   Future<void> patchPluginEnabled(
     String instanceId,
     String pluginId,
@@ -129,7 +246,7 @@ class DevicesService {
   }) async {
     final state = _authNotifier.state;
     if (state is! Authenticated || state.isDemo) return;
-    final token = await _authNotifier.getToken();
+    final token = await _getValidToken();
     if (token == null || token.isEmpty) return;
     try {
       await api.patchPluginEnabled(
@@ -141,6 +258,24 @@ class DevicesService {
         enabled,
         deviceId: deviceId,
       );
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        AppLogger.log('[DevicesService] patchPluginEnabled: 401 -> try refresh');
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          await api.patchPluginEnabled(
+            _client,
+            baseUrl,
+            newToken,
+            instanceId,
+            pluginId,
+            enabled,
+            deviceId: deviceId,
+          );
+          return;
+        }
+      }
+      rethrow;
     } catch (e) {
       if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         await api.patchPluginEnabled(
@@ -155,6 +290,38 @@ class DevicesService {
       } else {
         rethrow;
       }
+    }
+  }
+
+  // ── Logs ───────────────────────────────────────────────────────────────────
+
+  /// Upload app logs to server. Returns true on success. In demo mode: no-op, returns false.
+  Future<bool> uploadLogs() async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated || state.isDemo) return false;
+    final token = await _getValidToken();
+    if (token == null || token.isEmpty) return false;
+    final content = await AppLogger.getLogContent();
+    if (content.isEmpty) return false;
+    try {
+      await api.uploadLogs(_client, baseUrl, token, content);
+      return true;
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        AppLogger.log('[DevicesService] uploadLogs: 401 -> try refresh');
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          await api.uploadLogs(_client, baseUrl, newToken, content);
+          return true;
+        }
+      }
+      rethrow;
+    } catch (e) {
+      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        await api.uploadLogs(_client, fallbackBaseUrl, token, content);
+        return true;
+      }
+      rethrow;
     }
   }
 }

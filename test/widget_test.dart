@@ -8,23 +8,56 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:clietn_server_application/auth/auth_notifier.dart';
+import 'package:clietn_server_application/auth/auth_service.dart';
+import 'package:clietn_server_application/config/api_config.dart';
+import 'package:clietn_server_application/devices/devices_service.dart';
 import 'package:clietn_server_application/main.dart';
+import 'package:clietn_server_application/plugins/plugin_settings.dart';
+
+class _FakeAuthService implements AuthService {
+  @override
+  Future<String?> getToken() async => null;
+
+  @override
+  Future<void> refreshProfile() async {}
+
+  @override
+  Future<void> register(String username, String email, String password) async {}
+
+  @override
+  Future<void> restoreSession() async {}
+
+  @override
+  Future<void> signIn(String usernameOrEmail, String password) async {}
+
+  @override
+  void signInAsDemo() {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<bool> tryRefreshSession() async => false;
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('App shows auth page when unauthenticated', (WidgetTester tester) async {
+    final authNotifier = AuthNotifier(_FakeAuthService());
+    final devicesService = DevicesService(
+      baseUrl: ApiConfig.devicesBaseUrl,
+      fallbackBaseUrl: ApiConfig.devicesFallbackUrl,
+      authNotifier: authNotifier,
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(MyApp(
+      authNotifier: authNotifier,
+      devicesService: devicesService,
+      pluginSettings: PluginSettings(),
+    ));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Sign in to your Account'), findsOneWidget);
+    expect(find.byType(TextField), findsWidgets);
   });
 }

@@ -1,5 +1,3 @@
-import 'package:clietn_server_application/auth/auth_state.dart';
-
 /// Contract for auth: login, register, demo, signOut, restoreSession.
 abstract class AuthService {
   /// Sign in with username or email and password.
@@ -10,6 +8,13 @@ abstract class AuthService {
 
   /// Sign in as demo user (no HTTP, no token).
   void signInAsDemo();
+
+  /// Try to refresh access token using stored refresh token.
+  /// Returns true if refresh succeeded and tokens were updated.
+  Future<bool> tryRefreshSession();
+
+  /// Refresh current user profile fields via GET /me.
+  Future<void> refreshProfile();
 
   /// Sign out and clear storage.
   Future<void> signOut();

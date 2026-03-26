@@ -1,5 +1,5 @@
 name: clietn_server_application
-description: "A new Flutter project."
+description: "Hyperion — manage your devices and plugins."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -36,6 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.2.0
   flutter_secure_storage: ^9.2.2
+  path_provider: ^2.1.5
+  app_links: ^7.0.0
+  image_picker: ^1.2.1
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +66,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - lib/auth_logo.png
+    - lib/user_edit.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

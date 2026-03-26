@@ -1,5 +1,6 @@
 import 'package:clietn_server_application/app_theme.dart';
 import 'package:clietn_server_application/base_page.dart';
+import 'package:clietn_server_application/logging/app_logger.dart';
 import 'package:clietn_server_application/devices/devices_api.dart';
 import 'package:clietn_server_application/devices/devices_scope.dart';
 import 'package:clietn_server_application/widgets/error_with_retry.dart';
@@ -17,12 +18,7 @@ IconData _deviceIcon(String? icon) {
 }
 
 class DevicePage extends StatefulWidget {
-  const DevicePage({
-    super.key,
-    required this.onInstanceTap,
-  });
-
-  final void Function(String instanceId) onInstanceTap;
+  const DevicePage({super.key});
 
   @override
   State<DevicePage> createState() => _DevicePageState();
@@ -30,6 +26,20 @@ class DevicePage extends StatefulWidget {
 
 class _DevicePageState extends State<DevicePage> {
   Future<List<Device>>? _devicesFuture;
+  int _lastVersion = -1;
+
+  /// Called whenever an InheritedWidget dependency changes.
+  /// Resets the device list when DevicesScope bumps its version
+  /// (e.g. after device registration completes).
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final version = DevicesScope.versionOf(context);
+    if (version != _lastVersion) {
+      _lastVersion = version;
+      _devicesFuture = null; // will be re-fetched in build
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,8 +53,8 @@ class _DevicePageState extends State<DevicePage> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            debugPrint('[DevicePage] Error: ${snapshot.error}');
-            debugPrint('[DevicePage] StackTrace: ${snapshot.stackTrace}');
+            AppLogger.log('[DevicePage] Error: ${snapshot.error}');
+            AppLogger.log('[DevicePage] StackTrace: ${snapshot.stackTrace}');
             return Center(
               child: ErrorWithRetry(
                 message: snapshot.error.toString(),
@@ -110,7 +120,6 @@ class _DevicePageState extends State<DevicePage> {
                         name: device.name,
                         isOnline: device.status == 'Online',
                         instances: device.instances,
-                        onInstanceTap: widget.onInstanceTap,
                       ),
                     ),
                   ),
@@ -129,14 +138,12 @@ class _DeviceCard extends StatelessWidget {
   final String name;
   final bool isOnline;
   final List<Instance>? instances;
-  final void Function(String instanceId) onInstanceTap;
 
   const _DeviceCard({
     required this.icon,
     required this.name,
     required this.isOnline,
     this.instances,
-    required this.onInstanceTap,
   });
 
   @override
@@ -184,12 +191,9 @@ class _DeviceCard extends StatelessWidget {
           ...instances!.map(
             (inst) => Padding(
               padding: const EdgeInsets.only(left: 36, bottom: 6),
-              child: InkWell(
-                onTap: () => onInstanceTap(inst.id),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
                     children: [
                       Container(
                         width: 8,
@@ -222,7 +226,6 @@ class _DeviceCard extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         ],
       ],
     );

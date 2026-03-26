@@ -1,4 +1,4 @@
-package com.example.clietn_server_application
+package cc.techteastudio.hyperion
 
 import io.flutter.embedding.android.FlutterActivity
 

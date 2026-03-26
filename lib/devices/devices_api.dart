@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:clietn_server_application/auth/auth_api.dart';
-import 'package:flutter/foundation.dart';
+import 'package:clietn_server_application/logging/app_logger.dart';
 import 'package:http/http.dart' as http;
 
 // --- DTOs (camelCase JSON) ---
@@ -85,35 +85,77 @@ class Device {
 }
 
 class Session {
-  final String deviceId;
+  final String id;
   final String name;
   final String? icon;
-  final String? lastSeen;
-  final String? lastSeenAt;
+  final DateTime? createdAt;
 
   const Session({
-    required this.deviceId,
+    required this.id,
     required this.name,
     this.icon,
-    this.lastSeen,
-    this.lastSeenAt,
+    this.createdAt,
   });
 
   factory Session.fromJson(Map<String, dynamic> json) {
     return Session(
-      deviceId: json['deviceId'] as String? ?? '',
+      id: (json['id'] as String?) ?? '',
       name: json['name'] as String? ?? '',
       icon: json['icon'] as String?,
-      lastSeen: json['lastSeen'] as String?,
-      lastSeenAt: json['lastSeenAt'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)?.toLocal()
+          : null,
     );
   }
+}
+
+class RegisterDeviceRequest {
+  final String deviceId;
+  final String name;
+  final String? deviceType;
+
+  const RegisterDeviceRequest({
+    required this.deviceId,
+    required this.name,
+    this.deviceType,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'deviceId': deviceId,
+        'name': name,
+        if (deviceType != null) 'deviceType': deviceType,
+      };
 }
 
 // --- API calls ---
 
 const _jsonAccept = {'Accept': 'application/json'};
 
+/// POST /api/devices/register — idempotent device registration after login.
+Future<void> registerDevice(
+  http.Client client,
+  String baseUrl,
+  String token,
+  RegisterDeviceRequest request,
+) async {
+  final uri = Uri.parse('$baseUrl/api/devices/register');
+  final response = await client.post(
+    uri,
+    headers: {
+      'Content-Type': 'application/json',
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+    body: jsonEncode(request.toJson()),
+  );
+  if (response.statusCode >= 200 && response.statusCode < 300) return;
+  final message = problemDetailsDetail(response.body);
+  AppLogger.log('[devices_api] POST $uri -> ${response.statusCode}');
+  AppLogger.log('[devices_api] Response body: ${response.body}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
+/// GET /api/devices — all devices for the current user.
 Future<List<Device>> getDevices(
   http.Client client,
   String baseUrl,
@@ -128,17 +170,71 @@ Future<List<Device>> getDevices(
     },
   );
   if (response.statusCode == 200) {
-    final list = jsonDecode(response.body);
-    if (list is! List) return [];
-    return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      final list = jsonDecode(response.body);
+      if (list is! List) return [];
+      return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
+    }
   }
   final message = problemDetailsDetail(response.body);
-  debugPrint('[devices_api] GET $uri -> ${response.statusCode}');
-  debugPrint('[devices_api] Response body: ${response.body}');
-  debugPrint('[devices_api] Parsed message: $message');
+  AppLogger.log('[devices_api] GET $uri -> ${response.statusCode}');
+  AppLogger.log('[devices_api] Response body: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
+/// DELETE /api/devices/{deviceId} — remove a device.
+Future<void> deleteDevice(
+  http.Client client,
+  String baseUrl,
+  String token,
+  String deviceId,
+) async {
+  final uri = Uri.parse('$baseUrl/api/devices/$deviceId');
+  final response = await client.delete(
+    uri,
+    headers: {
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+  );
+  if (response.statusCode >= 200 && response.statusCode < 300) return;
+  final message = problemDetailsDetail(response.body);
+  AppLogger.log('[devices_api] DELETE $uri -> ${response.statusCode}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
+/// GET /api/plugins — full plugin catalog (enabled is always false in catalog).
+Future<List<Plugin>> getPluginCatalog(
+  http.Client client,
+  String baseUrl,
+  String token,
+) async {
+  final uri = Uri.parse('$baseUrl/api/plugins');
+  final response = await client.get(
+    uri,
+    headers: {
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+  );
+  if (response.statusCode == 200) {
+    try {
+      final list = jsonDecode(response.body);
+      if (list is! List) return [];
+      return list.map((e) => Plugin.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
+    }
+  }
+  final message = problemDetailsDetail(response.body);
+  AppLogger.log('[devices_api] GET $uri -> ${response.statusCode}');
+  AppLogger.log('[devices_api] Response body: ${response.body}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
+/// GET /api/sessions — active sessions (refresh tokens).
 Future<List<Session>> getSessions(
   http.Client client,
   String baseUrl,
@@ -153,19 +249,43 @@ Future<List<Session>> getSessions(
     },
   );
   if (response.statusCode == 200) {
-    final list = jsonDecode(response.body);
-    if (list is! List) return [];
-    return list.map((e) => Session.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      final list = jsonDecode(response.body);
+      if (list is! List) return [];
+      return list.map((e) => Session.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
+    }
   }
   final message = problemDetailsDetail(response.body);
-  debugPrint('[devices_api] GET $uri -> ${response.statusCode}');
-  debugPrint('[devices_api] Response body: ${response.body}');
-  debugPrint('[devices_api] Parsed message: $message');
+  AppLogger.log('[devices_api] GET $uri -> ${response.statusCode}');
+  AppLogger.log('[devices_api] Response body: ${response.body}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
+/// DELETE /api/sessions/{id} — revoke a specific session.
+Future<void> deleteSession(
+  http.Client client,
+  String baseUrl,
+  String token,
+  String sessionId,
+) async {
+  final uri = Uri.parse('$baseUrl/api/sessions/$sessionId');
+  final response = await client.delete(
+    uri,
+    headers: {
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+  );
+  if (response.statusCode >= 200 && response.statusCode < 300) return;
+  final message = problemDetailsDetail(response.body);
+  AppLogger.log('[devices_api] DELETE $uri -> ${response.statusCode}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
 /// PATCH /api/devices/{deviceId}/instances/{instanceId}/plugins/{pluginId}
-/// Falls back to /api/instances/{instanceId}/plugins/{pluginId} if deviceId is null.
+/// Used by desktop clients that have real instances.
 Future<void> patchPluginEnabled(
   http.Client client,
   String baseUrl,
@@ -190,8 +310,32 @@ Future<void> patchPluginEnabled(
   );
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
-  debugPrint('[devices_api] PATCH $uri -> ${response.statusCode}');
-  debugPrint('[devices_api] Response body: ${response.body}');
+  AppLogger.log('[devices_api] PATCH $uri -> ${response.statusCode}');
+  AppLogger.log('[devices_api] Response body: ${response.body}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
+/// POST /api/logs — upload client log file for diagnostics.
+Future<void> uploadLogs(
+  http.Client client,
+  String baseUrl,
+  String token,
+  String content,
+) async {
+  final uri = Uri.parse('$baseUrl/api/logs');
+  final response = await client.post(
+    uri,
+    headers: {
+      'Content-Type': 'application/json',
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+    body: jsonEncode({'content': content}),
+  );
+  if (response.statusCode >= 200 && response.statusCode < 300) return;
+  final message = problemDetailsDetail(response.body);
+  AppLogger.log('[devices_api] POST $uri -> ${response.statusCode}');
+  AppLogger.log('[devices_api] Response body: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 

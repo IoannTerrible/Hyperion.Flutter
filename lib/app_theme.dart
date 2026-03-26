@@ -85,4 +85,15 @@ class AppTheme {
   static const double fallingLightBlurSigma = 63.7;
   static const double fallingLightWidth = 313.0;
   static const double fallingLightHeight = 322.6;
+
+  // ----- Compact UI helpers -----
+  static double pagePadding(bool compact) => compact ? 8.0 : 16.0;
+  static double cardSpacing(bool compact) => compact ? 8.0 : 16.0;
+  static double itemSpacing(bool compact) => compact ? 6.0 : 12.0;
+  static EdgeInsets pageInsets(bool compact) =>
+      EdgeInsets.all(pagePadding(compact));
+  static EdgeInsets tilePadding(bool compact) => EdgeInsets.symmetric(
+        horizontal: compact ? 10.0 : 14.0,
+        vertical: compact ? 8.0 : 12.0,
+      );
 }

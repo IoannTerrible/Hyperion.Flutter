@@ -1,7 +1,10 @@
 import 'package:clietn_server_application/app_theme.dart';
 import 'package:clietn_server_application/base_page.dart';
+import 'package:clietn_server_application/logging/app_logger.dart';
 import 'package:clietn_server_application/devices/devices_api.dart';
 import 'package:clietn_server_application/devices/devices_scope.dart';
+import 'package:clietn_server_application/plugins/plugin_scope.dart';
+import 'package:clietn_server_application/plugins/plugin_settings.dart';
 import 'package:clietn_server_application/widgets/error_with_retry.dart';
 import 'package:flutter/material.dart';
 
@@ -9,225 +12,186 @@ IconData _pluginIcon(String? icon) {
   switch (icon) {
     case 'tv':
       return Icons.tv;
+    case 'music_note':
+      return Icons.music_note;
+    case 'videocam':
+      return Icons.videocam;
+    case 'brush':
+      return Icons.brush;
+    case 'power_settings_new':
+      return Icons.power_settings_new;
     case 'volume_up':
       return Icons.volume_up;
-    case 'touch_app':
-      return Icons.touch_app;
+    case 'bug_report':
+      return Icons.bug_report;
+    case 'view_compact':
+      return Icons.view_compact;
     default:
       return Icons.extension;
   }
 }
 
 class PluginsPage extends StatefulWidget {
-  const PluginsPage({
-    super.key,
-    this.scrollToInstanceId,
-    this.onScrollDone,
-  });
-
-  final String? scrollToInstanceId;
-  final VoidCallback? onScrollDone;
+  const PluginsPage({super.key});
 
   @override
   State<PluginsPage> createState() => _PluginsPageState();
 }
 
 class _PluginsPageState extends State<PluginsPage> {
-  final ScrollController _scrollController = ScrollController();
-  final GlobalKey _scrollContentKey = GlobalKey();
-  final Map<String, GlobalKey> _sectionKeys = {};
-  final Map<String, bool> _pluginOverrides = {};
+  Future<List<Plugin>>? _catalogFuture;
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  // Local overrides for non-system plugins (not persisted).
+  final Map<String, bool> _localOverrides = {};
+
+  bool _isSystemPlugin(String id) =>
+      id == kPluginDebugInfoId || id == kPluginCompactUiId;
+
+  bool _enabled(Plugin plugin, PluginSettings settings) {
+    if (plugin.id == kPluginDebugInfoId) return settings.debugInfo;
+    if (plugin.id == kPluginCompactUiId) return settings.compactUi;
+    return _localOverrides[plugin.id] ?? plugin.enabled;
   }
 
-  bool _enabled(Plugin plugin, String instanceId) {
-    final key = '${instanceId}_${plugin.id}';
-    return _pluginOverrides[key] ?? plugin.enabled;
-  }
-
-  Future<void> _setEnabled(
-    String? deviceId,
-    String instanceId,
-    String pluginId,
-    bool value,
-  ) async {
-    try {
-      await DevicesScope.of(context).patchPluginEnabled(
-        instanceId,
-        pluginId,
-        value,
-        deviceId: deviceId,
-      );
-      final key = '${instanceId}_$pluginId';
-      setState(() => _pluginOverrides[key] = value);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.toString(),
-              style: const TextStyle(color: AppTheme.textPrimary),
-            ),
-            backgroundColor: AppTheme.snackbarErrorBackground,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+  Future<void> _toggle(Plugin plugin, bool value, PluginSettings settings) async {
+    if (plugin.id == kPluginDebugInfoId) {
+      await settings.setDebugInfo(value);
+    } else if (plugin.id == kPluginCompactUiId) {
+      await settings.setCompactUi(value);
+    } else {
+      setState(() => _localOverrides[plugin.id] = value);
     }
   }
-
-  void _scrollToSection(String instanceId) {
-    widget.onScrollDone?.call();
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      final sectionKey = _sectionKeys[instanceId];
-      final ctx = sectionKey?.currentContext;
-      if (ctx == null || !ctx.mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final context = sectionKey?.currentContext;
-        if (context == null || !context.mounted) return;
-        Scrollable.ensureVisible(
-          context,
-          alignment: 0.0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      });
-    });
-  }
-
-  Future<List<Device>>? _devicesFuture;
 
   @override
   Widget build(BuildContext context) {
     final service = DevicesScope.of(context);
-    _devicesFuture ??= service.getDevices();
+    final settings = PluginScope.of(context);
+    final compact = settings.compactUi;
+    _catalogFuture ??= service.getPluginCatalog();
+
     return BasePage(
-      child: FutureBuilder<List<Device>>(
-        future: _devicesFuture,
+      child: FutureBuilder<List<Plugin>>(
+        future: _catalogFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            debugPrint('[PluginsPage] Error: ${snapshot.error}');
-            debugPrint('[PluginsPage] StackTrace: ${snapshot.stackTrace}');
+            AppLogger.log('[PluginsPage] Error: ${snapshot.error}');
             return Center(
               child: ErrorWithRetry(
                 message: snapshot.error.toString(),
                 onRetry: () =>
-                    setState(() => _devicesFuture = service.getDevices()),
+                    setState(() => _catalogFuture = service.getPluginCatalog()),
               ),
             );
           }
-          final devices = snapshot.data ?? [];
-          final instanceEntries = <({Device device, Instance instance})>[];
-          for (final d in devices) {
-            if (d.instances != null) {
-              for (final inst in d.instances!) {
-                instanceEntries.add((device: d, instance: inst));
-              }
-            }
-          }
-          for (final e in instanceEntries) {
-            _sectionKeys.putIfAbsent(e.instance.id, () => GlobalKey());
-          }
 
-          final scrollToId = widget.scrollToInstanceId;
-          if (scrollToId != null && _sectionKeys.containsKey(scrollToId)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollToSection(scrollToId);
-            });
-          }
+          final plugins = snapshot.data ?? [];
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                  child: Column(
-                    key: _scrollContentKey,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final entry in instanceEntries) ...[
-                        ColoredBox(
-                          key: _sectionKeys[entry.instance.id],
-                          color: Colors.transparent,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.chevron_left,
-                                      color: AppTheme.textPrimary,
-                                      size: 28,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      entry.instance.name,
-                                      style: TextStyle(
-                                        color: AppTheme.textPrimary,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Divider(
-                                height: 1,
-                                color: AppTheme.textSecondary.withOpacity(0.3),
-                                thickness: 1,
-                              ),
-                              const SizedBox(height: 12),
-                              for (final plugin in entry.instance.plugins) ...[
-                                _PluginTile(
-                                  icon: _pluginIcon(plugin.icon),
-                                  name: plugin.name,
-                                  enabled: _enabled(plugin, entry.instance.id),
-                                  onChanged: (v) => _setEnabled(
-                                    entry.device.id,
-                                    entry.instance.id,
-                                    plugin.id,
-                                    v,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                              ],
-                              if (entry.instance.plugins.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  child: Text(
-                                    'No plugins',
-                                    style: TextStyle(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 24),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+          if (plugins.isEmpty) {
+            return Center(
+              child: Text(
+                'No plugins available',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 15),
               ),
-            ],
+            );
+          }
+
+          // Split into system (Debug Info, Compact UI) and other plugins.
+          final systemPlugins = plugins.where((p) => _isSystemPlugin(p.id)).toList();
+          final otherPlugins = plugins.where((p) => !_isSystemPlugin(p.id)).toList();
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              compact ? 12 : 20,
+              compact ? 8 : 16,
+              compact ? 12 : 20,
+              24,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (systemPlugins.isNotEmpty) ...[
+                  _SectionHeader(title: 'App Settings', compact: compact),
+                  SizedBox(height: compact ? 8 : 12),
+                  for (final plugin in systemPlugins) ...[
+                    ListenableBuilder(
+                      listenable: settings,
+                      builder: (context, _) => _PluginTile(
+                        icon: _pluginIcon(plugin.icon),
+                        name: plugin.name,
+                        enabled: _enabled(plugin, settings),
+                        onChanged: (v) => _toggle(plugin, v, settings),
+                        compact: compact,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 6 : 10),
+                  ],
+                  if (otherPlugins.isNotEmpty) SizedBox(height: compact ? 12 : 20),
+                ],
+                if (otherPlugins.isNotEmpty) ...[
+                  _SectionHeader(title: 'Available Plugins', compact: compact),
+                  SizedBox(height: compact ? 8 : 12),
+                  for (final plugin in otherPlugins) ...[
+                    _PluginTile(
+                      icon: _pluginIcon(plugin.icon),
+                      name: plugin.name,
+                      enabled: _enabled(plugin, settings),
+                      onChanged: (v) => _toggle(plugin, v, settings),
+                      compact: compact,
+                    ),
+                    SizedBox(height: compact ? 6 : 10),
+                  ],
+                ],
+              ],
+            ),
           );
         },
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final bool compact;
+
+  const _SectionHeader({required this.title, required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(0, compact ? 4 : 8, 0, compact ? 8 : 12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.chevron_right,
+                color: AppTheme.textPrimary,
+                size: compact ? 22 : 28,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: compact ? 15 : 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(
+          height: 1,
+          color: AppTheme.textSecondary.withOpacity(0.3),
+          thickness: 1,
+        ),
+      ],
     );
   }
 }
@@ -237,26 +201,28 @@ class _PluginTile extends StatelessWidget {
   final String name;
   final bool enabled;
   final ValueChanged<bool> onChanged;
+  final bool compact;
 
   const _PluginTile({
     required this.icon,
     required this.name,
     required this.enabled,
     required this.onChanged,
+    required this.compact,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: AppTheme.tilePadding(compact),
       decoration: BoxDecoration(
         color: AppTheme.pluginsItem,
         borderRadius: BorderRadius.circular(AppTheme.radiusItem),
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppTheme.textPrimary, size: 24),
-          const SizedBox(width: 14),
+          Icon(icon, color: AppTheme.textPrimary, size: compact ? 20 : 24),
+          SizedBox(width: compact ? 10 : 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,7 @@
 import 'package:clietn_server_application/auth/auth_notifier.dart';
 import 'package:clietn_server_application/auth/auth_state.dart';
 import 'package:clietn_server_application/auth_page.dart';
+import 'package:clietn_server_application/verify_email_page.dart';
 import 'package:clietn_server_application/devices/devices_scope.dart';
 import 'package:clietn_server_application/devices/devices_service.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +39,11 @@ class AuthGate extends StatelessWidget {
         final state = AuthScope.of(context).state;
         return switch (state) {
           Unauthenticated() => const AuthPage(),
+          Authenticated() when state.isDemo => DevicesScope(
+              service: devicesService,
+              child: authenticatedChild,
+            ),
+          Authenticated() when !state.emailVerified => VerifyEmailPage(email: state.email),
           Authenticated() => DevicesScope(
               service: devicesService,
               child: authenticatedChild,
