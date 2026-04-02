@@ -284,21 +284,17 @@ Future<void> deleteSession(
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
-/// PATCH /api/devices/{deviceId}/instances/{instanceId}/plugins/{pluginId}
-/// Used by desktop clients that have real instances.
+/// PATCH /api/instances/{instanceId}/plugins/{pluginId}
+/// Plugin Service endpoint — toggle plugin enabled state on a desktop instance.
 Future<void> patchPluginEnabled(
   http.Client client,
   String baseUrl,
   String token,
   String instanceId,
   String pluginId,
-  bool enabled, {
-  String? deviceId,
-}) async {
-  final String path = deviceId != null
-      ? '/api/devices/$deviceId/instances/$instanceId/plugins/$pluginId'
-      : '/api/instances/$instanceId/plugins/$pluginId';
-  final uri = Uri.parse('$baseUrl$path');
+  bool enabled,
+) async {
+  final uri = Uri.parse('$baseUrl/api/instances/$instanceId/plugins/$pluginId');
   final response = await client.patch(
     uri,
     headers: {

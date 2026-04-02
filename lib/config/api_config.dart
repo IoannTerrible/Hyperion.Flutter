@@ -6,14 +6,19 @@ class ApiConfig {
 
   static const String _defaultAuthUrl = 'https://localhost:7204';
   static const String _defaultDevicesUrl = 'https://localhost:7264';
+  static const String _defaultPluginUrl = 'https://localhost:7266';
 
   /// Auth API base URL (login, register, validate-token).
   static String get authBaseUrl =>
       const String.fromEnvironment('AUTH_BASE_URL', defaultValue: _defaultAuthUrl);
 
-  /// Devices API base URL (devices, sessions, plugins).
+  /// Devices API base URL (devices, sessions).
   static String get devicesBaseUrl =>
       const String.fromEnvironment('DEVICES_BASE_URL', defaultValue: _defaultDevicesUrl);
+
+  /// Plugin Service base URL (plugin catalog, instance plugin state).
+  static String get pluginBaseUrl =>
+      const String.fromEnvironment('PLUGIN_BASE_URL', defaultValue: _defaultPluginUrl);
 
   /// Public Privacy Policy URL (no auth required).
   static const String privacyPolicyUrl = 'https://hyperion.techteastudio.cc/privacy';
@@ -21,6 +26,7 @@ class ApiConfig {
   /// HTTP fallback for TLS/connection errors (e.g. local Docker without HTTPS).
   static String get authFallbackUrl => _httpFallback(authBaseUrl);
   static String get devicesFallbackUrl => _httpFallback(devicesBaseUrl);
+  static String get pluginFallbackUrl => _httpFallback(pluginBaseUrl);
 
   static String _httpFallback(String url) =>
       url.startsWith('https:') ? 'http:${url.substring(6)}' : url;

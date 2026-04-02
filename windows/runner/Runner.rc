@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "clietn_server_application" "\0"
+            VALUE "CompanyName", "TechTeaStudio" "\0"
+            VALUE "FileDescription", "Hyperion" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "clietn_server_application" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "clietn_server_application.exe" "\0"
-            VALUE "ProductName", "clietn_server_application" "\0"
+            VALUE "InternalName", "Hyperion" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 TechTeaStudio. All rights reserved." "\0"
+            VALUE "OriginalFilename", "hyperion.exe" "\0"
+            VALUE "ProductName", "Hyperion" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

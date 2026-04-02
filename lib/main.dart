@@ -35,6 +35,8 @@ void main() async {
   final devicesService = DevicesService(
     baseUrl: ApiConfig.devicesBaseUrl,
     fallbackBaseUrl: ApiConfig.devicesFallbackUrl,
+    pluginBaseUrl: ApiConfig.pluginBaseUrl,
+    pluginFallbackUrl: ApiConfig.pluginFallbackUrl,
     authNotifier: authNotifier,
   );
   runApp(MyApp(
@@ -63,7 +65,7 @@ class MyApp extends StatelessWidget {
       child: AuthScope(
         notifier: authNotifier,
         child: MaterialApp(
-          title: 'Flutter Demo',
+          title: 'Hyperion',
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
           ),
@@ -79,15 +81,6 @@ class MyApp extends StatelessWidget {
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
 
   final String title;
 

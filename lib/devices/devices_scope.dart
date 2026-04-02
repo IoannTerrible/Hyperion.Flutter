@@ -4,15 +4,26 @@ import 'package:clietn_server_application/auth/auth_scope.dart';
 import 'package:clietn_server_application/auth/auth_state.dart';
 import 'package:clietn_server_application/devices/devices_service.dart';
 import 'package:clietn_server_application/logging/app_logger.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 
-String _deviceName() {
+Future<String> _deviceName() async {
   try {
-    final hostname = Platform.localHostname;
-    if (hostname.isNotEmpty && hostname != 'localhost' && hostname != '127.0.0.1') {
-      return hostname;
+    final info = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      final android = await info.androidInfo;
+      final brand = android.brand.isNotEmpty ? android.brand : '';
+      final model = android.model.isNotEmpty ? android.model : '';
+      final name = '$brand $model'.trim();
+      if (name.isNotEmpty) return name;
+    } else if (Platform.isIOS) {
+      final ios = await info.iosInfo;
+      final name = ios.name.isNotEmpty ? ios.name : ios.model;
+      if (name.isNotEmpty) return name;
     }
-  } catch (_) {}
+  } catch (e) {
+    AppLogger.log('[DevicesScope] _deviceName: failed to get device info: $e');
+  }
   if (Platform.isAndroid) return 'Android Phone';
   if (Platform.isIOS) return 'iPhone';
   return 'Mobile';
@@ -62,7 +73,7 @@ class _DevicesScopeState extends State<DevicesScope> {
       AppLogger.log('[DevicesScope] _registerDevice: no deviceId, skipping');
       return;
     }
-    final name = _deviceName();
+    final name = await _deviceName();
     AppLogger.log('[DevicesScope] _registerDevice: deviceId=$deviceId name="$name"');
     await widget.service.registerDevice(deviceId, name);
     // Bump version so dependent pages (DevicePage) know to refresh their data.

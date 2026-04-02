@@ -42,11 +42,15 @@ class DevicesService {
   final http.Client _client = http.Client();
   final String baseUrl;
   final String fallbackBaseUrl;
+  final String pluginBaseUrl;
+  final String pluginFallbackUrl;
   final AuthNotifier _authNotifier;
 
   DevicesService({
     required this.baseUrl,
     required this.fallbackBaseUrl,
+    required this.pluginBaseUrl,
+    required this.pluginFallbackUrl,
     required AuthNotifier authNotifier,
   }) : _authNotifier = authNotifier;
 
@@ -163,21 +167,34 @@ class DevicesService {
     if (token == null || token.isEmpty) return stubPluginCatalog;
     AppLogger.log('[DevicesService] getPluginCatalog: calling API');
     try {
-      return await api.getPluginCatalog(_client, baseUrl, token);
+      return await api.getPluginCatalog(_client, pluginBaseUrl, token);
     } on api.DevicesApiException catch (e) {
       if (e.statusCode == 401) {
         AppLogger.log('[DevicesService] getPluginCatalog: 401 -> try refresh');
         final newToken = await _refreshAndGetToken();
         if (newToken != null && newToken.isNotEmpty) {
-          return await api.getPluginCatalog(_client, baseUrl, newToken);
+          try {
+            return await api.getPluginCatalog(_client, pluginBaseUrl, newToken);
+          } on api.DevicesApiException catch (e2) {
+            AppLogger.log('[DevicesService] getPluginCatalog: retry failed (${e2.statusCode}) -> stubs');
+            return stubPluginCatalog;
+          }
         }
       }
-      rethrow;
+      // Plugin Service not deployed yet or endpoint unavailable — fall back gracefully.
+      AppLogger.log('[DevicesService] getPluginCatalog: error ${e.statusCode} -> stubs');
+      return stubPluginCatalog;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
-        return await api.getPluginCatalog(_client, fallbackBaseUrl, token);
+      if (_isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
+        try {
+          return await api.getPluginCatalog(_client, pluginFallbackUrl, token);
+        } catch (_) {
+          AppLogger.log('[DevicesService] getPluginCatalog: fallback failed -> stubs');
+          return stubPluginCatalog;
+        }
       }
-      rethrow;
+      AppLogger.log('[DevicesService] getPluginCatalog: unexpected error -> stubs: $e');
+      return stubPluginCatalog;
     }
   }
 
@@ -251,12 +268,11 @@ class DevicesService {
     try {
       await api.patchPluginEnabled(
         _client,
-        baseUrl,
+        pluginBaseUrl,
         token,
         instanceId,
         pluginId,
         enabled,
-        deviceId: deviceId,
       );
     } on api.DevicesApiException catch (e) {
       if (e.statusCode == 401) {
@@ -265,27 +281,25 @@ class DevicesService {
         if (newToken != null && newToken.isNotEmpty) {
           await api.patchPluginEnabled(
             _client,
-            baseUrl,
+            pluginBaseUrl,
             newToken,
             instanceId,
             pluginId,
             enabled,
-            deviceId: deviceId,
           );
           return;
         }
       }
       rethrow;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (_isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
         await api.patchPluginEnabled(
           _client,
-          fallbackBaseUrl,
+          pluginFallbackUrl,
           token,
           instanceId,
           pluginId,
           enabled,
-          deviceId: deviceId,
         );
       } else {
         rethrow;
