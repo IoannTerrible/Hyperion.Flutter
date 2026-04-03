@@ -65,6 +65,7 @@ class MyApp extends StatelessWidget {
       child: AuthScope(
         notifier: authNotifier,
         child: MaterialApp(
+          debugShowCheckedModeBanner: false,
           title: 'Hyperion',
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
@@ -90,6 +91,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _currentIndex = 0;
+  final titles = ['Devices', 'Plugins', 'Profile'];
 
   @override
   Widget build(BuildContext context) {
@@ -103,15 +105,11 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.textPrimary,
         title: Text(
-          _currentIndex == 0
-              ? 'Devices'
-              : (_currentIndex == 1 ? 'Plugins' : 'Profile'),
+          titles[_currentIndex],
           style: TextStyle(
-            color: _currentIndex == 1
-                ? AppTheme.textSecondary
-                : AppTheme.textPrimary,
-            fontSize: _currentIndex == 1 ? 14 : 20,
-            fontWeight: _currentIndex == 1 ? FontWeight.w400 : FontWeight.w600,
+            color: AppTheme.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
