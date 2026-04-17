@@ -1,4 +1,8 @@
 
+# Claude Code
+.claude/
+CLAUDE.md
+
 # Miscellaneous
 *.class
 *.lock
@@ -8,6 +12,8 @@
 .buildlog/
 .history
 
+/design/*
+design
 # Windows build outputs
 /windows/runner/Release/
 **/windows/runner/*.exe

@@ -1,22 +1,10 @@
 import 'dart:convert';
 
-import 'package:clietn_server_application/auth/auth_api.dart';
-import 'package:clietn_server_application/logging/app_logger.dart';
+import 'package:hyperion_flutter/auth/auth_api.dart';
+import 'package:hyperion_flutter/common/network_utils.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-
-bool _isConnectionOrTlsError(Object e) {
-  final s = e.toString().toLowerCase();
-  return s.contains('wrong version') ||
-      s.contains('handshake') ||
-      s.contains('socketexception') ||
-      s.contains('clientexception') ||
-      s.contains('connection refused') ||
-      s.contains('сетевое подключение');
-}
-
-String _httpFallback(String url) =>
-    url.startsWith('https:') ? 'http:${url.substring(6)}' : url;
 
 class UpdateMyProfileRequest {
   final String? displayName;
@@ -37,7 +25,7 @@ Future<UserResponse> putMyProfile(
   UpdateMyProfileRequest request, {
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<UserResponse> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/users/me/profile');
@@ -49,7 +37,7 @@ Future<UserResponse> putMyProfile(
         'Authorization': 'Bearer $token',
       },
       body: jsonEncode(request.toJson()),
-    );
+    ).timeout(const Duration(seconds: 30));
     AppLogger.log('[UsersApi.putMyProfile] Status: ${response.statusCode}');
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
@@ -67,7 +55,7 @@ Future<UserResponse> putMyProfile(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
@@ -80,7 +68,7 @@ Future<void> deleteMyAvatar(
   String token, {
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<void> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/users/me/avatar');
@@ -90,7 +78,7 @@ Future<void> deleteMyAvatar(
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       },
-    );
+    ).timeout(const Duration(seconds: 30));
     AppLogger.log('[UsersApi.deleteMyAvatar] Status: ${response.statusCode}');
     if (response.statusCode >= 200 && response.statusCode < 300) return;
     final detail = problemDetailsDetail(response.body);
@@ -101,7 +89,7 @@ Future<void> deleteMyAvatar(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
@@ -115,7 +103,7 @@ Future<void> deleteMyAccount(
   String token, {
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<void> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/users/me');
@@ -125,7 +113,7 @@ Future<void> deleteMyAccount(
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       },
-    );
+    ).timeout(const Duration(seconds: 30));
     AppLogger.log('[UsersApi.deleteMyAccount] Status: ${response.statusCode}');
     if (response.statusCode >= 200 && response.statusCode < 300) return;
     final detail = problemDetailsDetail(response.body);
@@ -136,7 +124,7 @@ Future<void> deleteMyAccount(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
@@ -150,7 +138,7 @@ Future<UserResponse> putMyAvatar(
   XFile file, {
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
   final bytes = await file.readAsBytes();
 
   Future<UserResponse> makeRequest(String url) async {
@@ -166,7 +154,7 @@ Future<UserResponse> putMyAvatar(
         ),
       );
 
-    final streamed = await client.send(req);
+    final streamed = await client.send(req).timeout(const Duration(seconds: 30));
     final response = await http.Response.fromStream(streamed);
     AppLogger.log('[UsersApi.putMyAvatar] Status: ${response.statusCode}, File: ${file.name}');
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -185,7 +173,7 @@ Future<UserResponse> putMyAvatar(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;

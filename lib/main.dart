@@ -1,20 +1,49 @@
-import 'package:clietn_server_application/app_theme.dart';
-import 'package:clietn_server_application/auth/auth_notifier.dart';
-import 'package:clietn_server_application/auth/auth_scope.dart';
-import 'package:clietn_server_application/auth/real_auth_service.dart';
-import 'package:clietn_server_application/config/api_config.dart';
-import 'package:clietn_server_application/device_page.dart';
-import 'package:clietn_server_application/devices/devices_service.dart';
-import 'package:clietn_server_application/logging/app_logger.dart';
-import 'package:clietn_server_application/plugins/plugin_scope.dart';
-import 'package:clietn_server_application/plugins/plugin_settings.dart';
-import 'package:clietn_server_application/plugins_page.dart';
-import 'package:clietn_server_application/profile_page.dart';
+import 'dart:io';
+
+import 'package:hyperion_flutter/app_theme.dart';
+import 'package:hyperion_flutter/auth/auth_notifier.dart';
+import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/auth/real_auth_service.dart';
+import 'package:hyperion_flutter/biometric/biometric_notifier.dart';
+import 'package:hyperion_flutter/biometric/biometric_scope.dart';
+import 'package:hyperion_flutter/biometric/real_biometric_service.dart';
+import 'package:hyperion_flutter/config/api_config.dart';
+import 'package:hyperion_flutter/device_page.dart';
+import 'package:hyperion_flutter/devices/devices_service.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
+import 'package:hyperion_flutter/plugins/plugin_scope.dart';
+import 'package:hyperion_flutter/plugins/plugin_settings.dart';
+import 'package:hyperion_flutter/plugins_page.dart';
+import 'package:hyperion_flutter/profile_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:tray_manager/tray_manager.dart';
+
+Future<void> _initTray() async {
+  if (kIsWeb) return;
+  if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
+  try {
+    // Icon is resolved from the Flutter asset bundle at runtime.
+    // On Windows an ICO file is preferred; PNG works on Linux/macOS.
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final sep = Platform.pathSeparator;
+    final iconPath = '$exeDir${sep}data${sep}flutter_assets${sep}lib${sep}auth_logo.png';
+    await trayManager.setIcon(iconPath);
+    await trayManager.setToolTip('Hyperion');
+    await trayManager.setContextMenu(Menu(
+      items: [
+        MenuItem(key: 'quit', label: 'Quit Hyperion'),
+      ],
+    ));
+  } catch (e) {
+    AppLogger.log('[Tray] init failed (non-fatal): $e');
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppLogger.init();
+  await _initTray();
 
   // Load persisted plugin preferences before the first frame.
   final pluginSettings = PluginSettings();
@@ -39,32 +68,39 @@ void main() async {
     pluginFallbackUrl: ApiConfig.pluginFallbackUrl,
     authNotifier: authNotifier,
   );
+  final biometricNotifier = BiometricNotifier(RealBiometricService());
+  await biometricNotifier.init();
   runApp(MyApp(
     authNotifier: authNotifier,
     devicesService: devicesService,
     pluginSettings: pluginSettings,
+    biometricNotifier: biometricNotifier,
   ));
 }
 
 class MyApp extends StatelessWidget {
-  MyApp({
+  const MyApp({
     super.key,
     required this.authNotifier,
     required this.devicesService,
     required this.pluginSettings,
+    required this.biometricNotifier,
   });
 
   final AuthNotifier authNotifier;
   final DevicesService devicesService;
   final PluginSettings pluginSettings;
+  final BiometricNotifier biometricNotifier;
 
   @override
   Widget build(BuildContext context) {
-    return PluginScope(
-      settings: pluginSettings,
-      child: AuthScope(
-        notifier: authNotifier,
-        child: MaterialApp(
+    return BiometricScope(
+      notifier: biometricNotifier,
+      child: PluginScope(
+        settings: pluginSettings,
+        child: AuthScope(
+          notifier: authNotifier,
+          child: MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Hyperion',
           theme: ThemeData(
@@ -76,7 +112,8 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -89,17 +126,38 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage> with TrayListener {
   int _currentIndex = 0;
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      trayManager.addListener(this);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      trayManager.removeListener(this);
+    }
+    super.dispose();
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) {
+    if (menuItem.key == 'quit') exit(0);
+  }
+
   final titles = ['Devices', 'Plugins', 'Profile'];
+  late final List<Widget> _pages = const [
+    DevicePage(),
+    PluginsPage(),
+    ProfilePage(),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      const DevicePage(),
-      const PluginsPage(),
-      const ProfilePage(),
-    ];
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
@@ -114,7 +172,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
       backgroundColor: AppTheme.background,
-      body: pages[_currentIndex],
+      body: _pages[_currentIndex],
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Container(
@@ -130,7 +188,7 @@ class _MyHomePageState extends State<MyHomePage> {
             backgroundColor: Colors.transparent,
             elevation: 12,
             selectedItemColor: AppTheme.textPrimary,
-            unselectedItemColor: AppTheme.textPrimary.withOpacity(0.7),
+            unselectedItemColor: AppTheme.textPrimary.withValues(alpha:0.7),
             type: BottomNavigationBarType.fixed,
             items: const [
               BottomNavigationBarItem(

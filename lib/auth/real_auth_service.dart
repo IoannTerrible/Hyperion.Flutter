@@ -1,8 +1,9 @@
 import 'dart:math';
 
-import 'package:clietn_server_application/auth/auth_api.dart';
-import 'package:clietn_server_application/auth/auth_state.dart';
-import 'package:clietn_server_application/auth/auth_service.dart';
+import 'package:hyperion_flutter/auth/auth_api.dart';
+import 'package:hyperion_flutter/auth/auth_state.dart';
+import 'package:hyperion_flutter/auth/auth_service.dart';
+import 'package:hyperion_flutter/common/network_utils.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -20,16 +21,6 @@ String _generateUuid() {
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
-}
-
-bool _isConnectionOrTlsError(Object e) {
-  final s = e.toString().toLowerCase();
-  return s.contains('wrong version') ||
-      s.contains('handshake') ||
-      s.contains('socketexception') ||
-      s.contains('clientexception') ||
-      s.contains('connection refused') ||
-      s.contains('сетевое подключение');
 }
 
 /// Real auth implementation: HTTP + secure storage, demo without HTTP.
@@ -100,7 +91,7 @@ class RealAuthService implements AuthService {
       try {
         return await getMe(_client, baseUrl, token);
       } catch (e) {
-        if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
           return await getMe(_client, fallbackBaseUrl, token);
         }
         rethrow;
@@ -164,7 +155,7 @@ class RealAuthService implements AuthService {
     try {
       result = await postLogin(_client, baseUrl, request);
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         result = await postLogin(_client, fallbackBaseUrl, request);
       } else {
         rethrow;
@@ -184,7 +175,7 @@ class RealAuthService implements AuthService {
     try {
       result = await postRegister(_client, baseUrl, request);
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         result = await postRegister(_client, fallbackBaseUrl, request);
       } else {
         rethrow;
@@ -208,7 +199,7 @@ class RealAuthService implements AuthService {
       try {
         result = await postRefreshToken(_client, baseUrl, req);
       } catch (e) {
-        if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
           result = await postRefreshToken(_client, fallbackBaseUrl, req);
         } else {
           rethrow;
@@ -244,7 +235,7 @@ class RealAuthService implements AuthService {
         try {
           await postLogout(_client, baseUrl, req);
         } catch (e) {
-          if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+          if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
             await postLogout(_client, fallbackBaseUrl, req);
           } else {
             rethrow;
@@ -279,7 +270,7 @@ class RealAuthService implements AuthService {
       try {
         result = await postValidateToken(_client, baseUrl, request);
       } catch (e) {
-        if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
           result = await postValidateToken(_client, fallbackBaseUrl, request);
         } else {
           rethrow;

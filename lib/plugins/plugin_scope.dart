@@ -1,4 +1,4 @@
-import 'package:clietn_server_application/plugins/plugin_settings.dart';
+import 'package:hyperion_flutter/plugins/plugin_settings.dart';
 import 'package:flutter/widgets.dart';
 
 /// Provides [PluginSettings] to the widget tree.

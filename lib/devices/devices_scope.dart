@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:clietn_server_application/auth/auth_scope.dart';
-import 'package:clietn_server_application/auth/auth_state.dart';
-import 'package:clietn_server_application/devices/devices_service.dart';
-import 'package:clietn_server_application/logging/app_logger.dart';
+import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/auth/auth_state.dart';
+import 'package:hyperion_flutter/devices/devices_service.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 

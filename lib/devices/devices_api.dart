@@ -1,7 +1,8 @@
 import 'dart:convert';
 
-import 'package:clietn_server_application/auth/auth_api.dart';
-import 'package:clietn_server_application/logging/app_logger.dart';
+import 'package:hyperion_flutter/auth/auth_api.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 // --- DTOs (camelCase JSON) ---
@@ -127,6 +128,26 @@ class RegisterDeviceRequest {
       };
 }
 
+// --- Background isolate decoders (top-level required by compute()) ---
+
+List<Device> _decodeDeviceList(String body) {
+  final list = jsonDecode(body);
+  if (list is! List) return [];
+  return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
+}
+
+List<Plugin> _decodePluginCatalog(String body) {
+  final list = jsonDecode(body);
+  if (list is! List) return [];
+  return list.map((e) => Plugin.fromJson(e as Map<String, dynamic>)).toList();
+}
+
+List<Session> _decodeSessionList(String body) {
+  final list = jsonDecode(body);
+  if (list is! List) return [];
+  return list.map((e) => Session.fromJson(e as Map<String, dynamic>)).toList();
+}
+
 // --- API calls ---
 
 const _jsonAccept = {'Accept': 'application/json'};
@@ -147,7 +168,7 @@ Future<void> registerDevice(
       'Authorization': 'Bearer $token',
     },
     body: jsonEncode(request.toJson()),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
   AppLogger.log('[devices_api] POST $uri -> ${response.statusCode}');
@@ -168,12 +189,10 @@ Future<List<Device>> getDevices(
       ..._jsonAccept,
       'Authorization': 'Bearer $token',
     },
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     try {
-      final list = jsonDecode(response.body);
-      if (list is! List) return [];
-      return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
+      return await compute(_decodeDeviceList, response.body);
     } catch (_) {
       throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
     }
@@ -198,7 +217,7 @@ Future<void> deleteDevice(
       ..._jsonAccept,
       'Authorization': 'Bearer $token',
     },
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
   AppLogger.log('[devices_api] DELETE $uri -> ${response.statusCode}');
@@ -218,12 +237,10 @@ Future<List<Plugin>> getPluginCatalog(
       ..._jsonAccept,
       'Authorization': 'Bearer $token',
     },
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     try {
-      final list = jsonDecode(response.body);
-      if (list is! List) return [];
-      return list.map((e) => Plugin.fromJson(e as Map<String, dynamic>)).toList();
+      return await compute(_decodePluginCatalog, response.body);
     } catch (_) {
       throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
     }
@@ -247,12 +264,10 @@ Future<List<Session>> getSessions(
       ..._jsonAccept,
       'Authorization': 'Bearer $token',
     },
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     try {
-      final list = jsonDecode(response.body);
-      if (list is! List) return [];
-      return list.map((e) => Session.fromJson(e as Map<String, dynamic>)).toList();
+      return await compute(_decodeSessionList, response.body);
     } catch (_) {
       throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
     }
@@ -277,7 +292,7 @@ Future<void> deleteSession(
       ..._jsonAccept,
       'Authorization': 'Bearer $token',
     },
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
   AppLogger.log('[devices_api] DELETE $uri -> ${response.statusCode}');
@@ -303,7 +318,7 @@ Future<void> patchPluginEnabled(
       'Authorization': 'Bearer $token',
     },
     body: jsonEncode({'enabled': enabled}),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
   AppLogger.log('[devices_api] PATCH $uri -> ${response.statusCode}');
@@ -327,7 +342,7 @@ Future<void> uploadLogs(
       'Authorization': 'Bearer $token',
     },
     body: jsonEncode({'content': content}),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
   AppLogger.log('[devices_api] POST $uri -> ${response.statusCode}');

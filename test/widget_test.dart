@@ -8,12 +8,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:clietn_server_application/auth/auth_notifier.dart';
-import 'package:clietn_server_application/auth/auth_service.dart';
-import 'package:clietn_server_application/config/api_config.dart';
-import 'package:clietn_server_application/devices/devices_service.dart';
-import 'package:clietn_server_application/main.dart';
-import 'package:clietn_server_application/plugins/plugin_settings.dart';
+import 'package:hyperion_flutter/auth/auth_notifier.dart';
+import 'package:hyperion_flutter/auth/auth_service.dart';
+import 'package:hyperion_flutter/config/api_config.dart';
+import 'package:hyperion_flutter/devices/devices_service.dart';
+import 'package:hyperion_flutter/main.dart';
+import 'package:hyperion_flutter/plugins/plugin_settings.dart';
 
 class _FakeAuthService implements AuthService {
   @override
@@ -47,6 +47,8 @@ void main() {
     final devicesService = DevicesService(
       baseUrl: ApiConfig.devicesBaseUrl,
       fallbackBaseUrl: ApiConfig.devicesFallbackUrl,
+      pluginBaseUrl: ApiConfig.pluginBaseUrl,
+      pluginFallbackUrl: ApiConfig.pluginFallbackUrl,
       authNotifier: authNotifier,
     );
 

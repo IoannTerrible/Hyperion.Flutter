@@ -1,7 +1,8 @@
-import 'package:clietn_server_application/auth/auth_notifier.dart';
-import 'package:clietn_server_application/auth/auth_state.dart';
-import 'package:clietn_server_application/devices/devices_api.dart' as api;
-import 'package:clietn_server_application/logging/app_logger.dart';
+import 'package:hyperion_flutter/auth/auth_notifier.dart';
+import 'package:hyperion_flutter/auth/auth_state.dart';
+import 'package:hyperion_flutter/common/network_utils.dart';
+import 'package:hyperion_flutter/devices/devices_api.dart' as api;
+import 'package:hyperion_flutter/logging/app_logger.dart';
 import 'package:http/http.dart' as http;
 
 /// Stub devices for demo mode.
@@ -26,16 +27,6 @@ List<api.Plugin> get stubPluginCatalog => const [
       api.Plugin(id: '44424700-0000-4000-8000-000000000007', name: 'Debug Info', enabled: false, icon: 'bug_report'),
       api.Plugin(id: '43550000-0000-4000-8000-000000000008', name: 'Compact UI', enabled: false, icon: 'view_compact'),
     ];
-
-bool _isConnectionOrTlsError(Object e) {
-  final s = e.toString().toLowerCase();
-  return s.contains('wrong version') ||
-      s.contains('handshake') ||
-      s.contains('socketexception') ||
-      s.contains('clientexception') ||
-      s.contains('connection refused') ||
-      s.contains('сетевое подключение');
-}
 
 /// Delivers devices, sessions and plugin catalog: with token → API; demo → stubs.
 class DevicesService {
@@ -85,10 +76,15 @@ class DevicesService {
       await api.registerDevice(_client, baseUrl, token, request);
       AppLogger.log('[DevicesService] registerDevice: success');
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
-        await api.registerDevice(_client, fallbackBaseUrl, token, request);
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        try {
+          await api.registerDevice(_client, fallbackBaseUrl, token, request);
+        } catch (fallbackError) {
+          AppLogger.log('[DevicesService.registerDevice] Fallback also failed: $fallbackError');
+        }
+      } else {
+        AppLogger.log('[DevicesService.registerDevice] Registration failed (non-fatal): $e');
       }
-      // Best-effort — registration failure is non-fatal
     }
   }
 
@@ -122,7 +118,7 @@ class DevicesService {
       }
       rethrow;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         return await api.getDevices(_client, fallbackBaseUrl, token);
       }
       rethrow;
@@ -147,7 +143,7 @@ class DevicesService {
       }
       rethrow;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         await api.deleteDevice(_client, fallbackBaseUrl, token, deviceId);
       } else {
         rethrow;
@@ -185,7 +181,7 @@ class DevicesService {
       AppLogger.log('[DevicesService] getPluginCatalog: error ${e.statusCode} -> stubs');
       return stubPluginCatalog;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
+      if (isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
         try {
           return await api.getPluginCatalog(_client, pluginFallbackUrl, token);
         } catch (_) {
@@ -228,7 +224,7 @@ class DevicesService {
       }
       rethrow;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         return await api.getSessions(_client, fallbackBaseUrl, token);
       }
       rethrow;
@@ -244,7 +240,7 @@ class DevicesService {
     try {
       await api.deleteSession(_client, baseUrl, token, sessionId);
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         await api.deleteSession(_client, fallbackBaseUrl, token, sessionId);
       } else {
         rethrow;
@@ -292,7 +288,7 @@ class DevicesService {
       }
       rethrow;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
+      if (isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
         await api.patchPluginEnabled(
           _client,
           pluginFallbackUrl,
@@ -331,7 +327,7 @@ class DevicesService {
       }
       rethrow;
     } catch (e) {
-      if (_isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         await api.uploadLogs(_client, fallbackBaseUrl, token, content);
         return true;
       }

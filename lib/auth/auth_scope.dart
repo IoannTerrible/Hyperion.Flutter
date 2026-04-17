@@ -1,9 +1,9 @@
-import 'package:clietn_server_application/auth/auth_notifier.dart';
-import 'package:clietn_server_application/auth/auth_state.dart';
-import 'package:clietn_server_application/auth_page.dart';
-import 'package:clietn_server_application/verify_email_page.dart';
-import 'package:clietn_server_application/devices/devices_scope.dart';
-import 'package:clietn_server_application/devices/devices_service.dart';
+import 'package:hyperion_flutter/auth/auth_notifier.dart';
+import 'package:hyperion_flutter/auth/auth_state.dart';
+import 'package:hyperion_flutter/auth_page.dart';
+import 'package:hyperion_flutter/verify_email_page.dart';
+import 'package:hyperion_flutter/devices/devices_scope.dart';
+import 'package:hyperion_flutter/devices/devices_service.dart';
 import 'package:flutter/material.dart';
 
 class AuthScope extends InheritedNotifier<AuthNotifier> {

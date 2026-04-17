@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// API base URLs. Override at build time with --dart-define:
 ///   flutter run --dart-define=AUTH_BASE_URL=http://192.168.1.100:7204
 ///   flutter build apk --dart-define=AUTH_BASE_URL=https://api.example.com
@@ -24,9 +26,13 @@ class ApiConfig {
   static const String privacyPolicyUrl = 'https://hyperion.techteastudio.cc/privacy';
 
   /// HTTP fallback for TLS/connection errors (e.g. local Docker without HTTPS).
-  static String get authFallbackUrl => _httpFallback(authBaseUrl);
-  static String get devicesFallbackUrl => _httpFallback(devicesBaseUrl);
-  static String get pluginFallbackUrl => _httpFallback(pluginBaseUrl);
+  /// In release builds the fallback is the same as the base URL (no HTTP downgrade).
+  static String get authFallbackUrl =>
+      kReleaseMode ? authBaseUrl : _httpFallback(authBaseUrl);
+  static String get devicesFallbackUrl =>
+      kReleaseMode ? devicesBaseUrl : _httpFallback(devicesBaseUrl);
+  static String get pluginFallbackUrl =>
+      kReleaseMode ? pluginBaseUrl : _httpFallback(pluginBaseUrl);
 
   static String _httpFallback(String url) =>
       url.startsWith('https:') ? 'http:${url.substring(6)}' : url;

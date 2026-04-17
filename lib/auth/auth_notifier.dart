@@ -1,6 +1,6 @@
-import 'package:clietn_server_application/auth/auth_api.dart';
-import 'package:clietn_server_application/auth/auth_service.dart';
-import 'package:clietn_server_application/auth/auth_state.dart';
+import 'package:hyperion_flutter/auth/auth_api.dart';
+import 'package:hyperion_flutter/auth/auth_service.dart';
+import 'package:hyperion_flutter/auth/auth_state.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 

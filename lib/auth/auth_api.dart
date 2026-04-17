@@ -1,19 +1,7 @@
 import 'dart:convert';
 
+import 'package:hyperion_flutter/common/network_utils.dart';
 import 'package:http/http.dart' as http;
-
-bool _isConnectionOrTlsError(Object e) {
-  final s = e.toString().toLowerCase();
-  return s.contains('wrong version') ||
-      s.contains('handshake') ||
-      s.contains('socketexception') ||
-      s.contains('clientexception') ||
-      s.contains('connection refused') ||
-      s.contains('сетевое подключение');
-}
-
-String _httpFallback(String url) =>
-    url.startsWith('https:') ? 'http:${url.substring(6)}' : url;
 
 // --- Request DTOs (camelCase JSON) ---
 
@@ -205,7 +193,7 @@ Future<AuthenticationResult> postLogin(
     uri,
     headers: _jsonHeaders,
     body: jsonEncode(request.toJson()),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     final map = jsonDecode(response.body) as Map<String, dynamic>?;
     return AuthenticationResult.fromJson(map ?? {});
@@ -232,7 +220,7 @@ Future<AuthenticationResult> postRegister(
     uri,
     headers: _jsonHeaders,
     body: jsonEncode(request.toJson()),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     final map = jsonDecode(response.body) as Map<String, dynamic>?;
     return AuthenticationResult.fromJson(map ?? {});
@@ -259,7 +247,7 @@ Future<AuthenticationResult> postValidateToken(
     uri,
     headers: _jsonHeaders,
     body: jsonEncode(request.toJson()),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     final map = jsonDecode(response.body) as Map<String, dynamic>?;
     return AuthenticationResult.fromJson(map ?? {});
@@ -280,7 +268,7 @@ Future<AuthenticationResult> postRefreshToken(
     uri,
     headers: _jsonHeaders,
     body: jsonEncode(request.toJson()),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     final map = jsonDecode(response.body) as Map<String, dynamic>?;
     return AuthenticationResult.fromJson(map ?? {});
@@ -301,7 +289,7 @@ Future<void> postLogout(
     uri,
     headers: _jsonHeaders,
     body: jsonEncode(request.toJson()),
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   throw AuthApiException(
     problemDetailsDetail(response.body),
@@ -315,12 +303,13 @@ Future<void> postVerifyEmail(
   required String token,
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<void> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/authentication/verify-email')
         .replace(queryParameters: {'token': token});
-    final response = await client.get(uri, headers: _jsonHeaders);
+    final response = await client.get(uri, headers: _jsonHeaders)
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode >= 200 && response.statusCode < 300) return;
     throw AuthApiException(
       problemDetailsDetail(response.body),
@@ -331,7 +320,7 @@ Future<void> postVerifyEmail(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
@@ -344,14 +333,14 @@ Future<void> postResendVerification(
   required String token,
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<void> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/authentication/resend-verification');
     final response = await client.post(uri, headers: {
       ..._jsonHeaders,
       'Authorization': 'Bearer $token',
-    });
+    }).timeout(const Duration(seconds: 30));
     if (response.statusCode >= 200 && response.statusCode < 300) return;
     throw AuthApiException(
       problemDetailsDetail(response.body),
@@ -362,7 +351,7 @@ Future<void> postResendVerification(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
@@ -377,7 +366,7 @@ Future<UserResponse> getMe(http.Client client, String baseUrl, String token) asy
       ..._jsonHeaders,
       'Authorization': 'Bearer $token',
     },
-  );
+  ).timeout(const Duration(seconds: 30));
   if (response.statusCode == 200) {
     final map = jsonDecode(response.body) as Map<String, dynamic>?;
     return UserResponse.fromJson(map ?? {});
@@ -395,7 +384,7 @@ Future<void> postForgotPassword(
   String email, {
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<void> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/authentication/forgot-password');
@@ -403,7 +392,7 @@ Future<void> postForgotPassword(
       uri,
       headers: _jsonHeaders,
       body: jsonEncode({'email': email}),
-    );
+    ).timeout(const Duration(seconds: 30));
     if (response.statusCode >= 200 && response.statusCode < 300) return;
     throw AuthApiException(
       problemDetailsDetail(response.body),
@@ -414,7 +403,7 @@ Future<void> postForgotPassword(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
@@ -430,7 +419,7 @@ Future<String> postVerifyResetCode(
   String code, {
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<String> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/authentication/verify-reset-code');
@@ -438,7 +427,7 @@ Future<String> postVerifyResetCode(
       uri,
       headers: _jsonHeaders,
       body: jsonEncode({'email': email, 'code': code}),
-    );
+    ).timeout(const Duration(seconds: 30));
     if (response.statusCode == 200) {
       final map = jsonDecode(response.body) as Map<String, dynamic>?;
       final token = map?['resetToken'] as String?;
@@ -456,7 +445,7 @@ Future<String> postVerifyResetCode(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
@@ -471,7 +460,7 @@ Future<void> postResetPassword(
   String newPassword, {
   String? fallbackBaseUrl,
 }) async {
-  final fallback = fallbackBaseUrl ?? _httpFallback(baseUrl);
+  final fallback = fallbackBaseUrl ?? httpFallback(baseUrl);
 
   Future<void> makeRequest(String url) async {
     final uri = Uri.parse('$url/api/authentication/reset-password');
@@ -479,7 +468,7 @@ Future<void> postResetPassword(
       uri,
       headers: _jsonHeaders,
       body: jsonEncode({'resetToken': resetToken, 'newPassword': newPassword}),
-    );
+    ).timeout(const Duration(seconds: 30));
     if (response.statusCode >= 200 && response.statusCode < 300) return;
     throw AuthApiException(
       problemDetailsDetail(response.body),
@@ -490,7 +479,7 @@ Future<void> postResetPassword(
   try {
     return await makeRequest(baseUrl);
   } catch (e) {
-    if (_isConnectionOrTlsError(e) && fallback != baseUrl) {
+    if (isConnectionOrTlsError(e) && fallback != baseUrl) {
       return await makeRequest(fallback);
     }
     rethrow;
