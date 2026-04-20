@@ -1,9 +1,9 @@
-import 'package:clietn_server_application/app_theme.dart';
-import 'package:clietn_server_application/base_page.dart';
-import 'package:clietn_server_application/logging/app_logger.dart';
-import 'package:clietn_server_application/devices/devices_api.dart';
-import 'package:clietn_server_application/devices/devices_scope.dart';
-import 'package:clietn_server_application/widgets/error_with_retry.dart';
+import 'package:hyperion_flutter/app_theme.dart';
+import 'package:hyperion_flutter/base_page.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
+import 'package:hyperion_flutter/devices/devices_api.dart';
+import 'package:hyperion_flutter/devices/devices_scope.dart';
+import 'package:hyperion_flutter/widgets/error_with_retry.dart';
 import 'package:flutter/material.dart';
 
 IconData _deviceIcon(String? icon) {
@@ -94,7 +94,7 @@ class _DevicePageState extends State<DevicePage> {
                 ),
                 Divider(
                   height: 1,
-                  color: AppTheme.textSecondary.withOpacity(0.3),
+                  color: AppTheme.textSecondary.withValues(alpha:0.3),
                   thickness: 1,
                 ),
                 const SizedBox(height: 14),
@@ -109,7 +109,7 @@ class _DevicePageState extends State<DevicePage> {
                             BorderRadius.circular(AppTheme.radiusPluginsCard),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
+                            color: Colors.black.withValues(alpha:0.2),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),

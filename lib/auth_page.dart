@@ -1,7 +1,8 @@
-import 'package:clietn_server_application/app_theme.dart';
-import 'package:clietn_server_application/auth/auth_api.dart';
-import 'package:clietn_server_application/auth/auth_scope.dart';
-import 'package:clietn_server_application/config/api_config.dart';
+import 'package:hyperion_flutter/app_theme.dart';
+import 'package:hyperion_flutter/auth/auth_api.dart';
+import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/biometric/biometric_scope.dart';
+import 'package:hyperion_flutter/config/api_config.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -21,6 +22,7 @@ class _AuthPageState extends State<AuthPage> {
   String? _lastShownError;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  late final TapGestureRecognizer _privacyPolicyTapRecognizer;
 
   static List<String> _passwordErrors(String password) {
     final p = password.trim();
@@ -57,18 +59,29 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _privacyPolicyTapRecognizer = TapGestureRecognizer()
+      ..onTap = () => launchUrl(
+            Uri.parse(ApiConfig.privacyPolicyUrl),
+            mode: LaunchMode.externalApplication,
+          );
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _privacyPolicyTapRecognizer.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final notifier = AuthScope.of(context);
     return ListenableBuilder(
-      listenable: AuthScope.of(context),
+      listenable: notifier,
       builder: (context, _) {
-        final notifier = AuthScope.of(context);
         final isLoading = notifier.isLoading;
         final lastError = notifier.lastError;
         return Scaffold(
@@ -111,6 +124,7 @@ class _AuthPageState extends State<AuthPage> {
                     _buildForgotPasswordLink(context),
                     const SizedBox(height: 20),
                     _buildSignInButton(isLoading),
+                    _buildBiometricButton(isLoading),
                     const SizedBox(height: 16),
                     _buildDemoLink(isLoading),
                     const SizedBox(height: 24),
@@ -132,7 +146,7 @@ class _AuthPageState extends State<AuthPage> {
       height: 80,
       width: 80,
       fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => Icon(
+      errorBuilder: (_, _, _) => Icon(
         Icons.account_circle,
         size: 80,
         color: AppTheme.textSecondary,
@@ -188,7 +202,7 @@ class _AuthPageState extends State<AuthPage> {
               ),
               child: ListenableBuilder(
                 listenable: notifier,
-                builder: (_, __) {
+                builder: (_, _) {
                   final loading = notifier.isLoading;
                   final err = notifier.lastError;
                   final pwErrors = _passwordErrors(passwordController.text);
@@ -218,7 +232,7 @@ class _AuthPageState extends State<AuthPage> {
                       style: TextStyle(color: AppTheme.inputText, fontSize: 16),
                       decoration: InputDecoration(
                         hintText: 'Username',
-                        hintStyle: TextStyle(color: AppTheme.inputText.withOpacity(0.7)),
+                        hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
                         prefixIcon: Icon(Icons.person_outline, color: AppTheme.inputText, size: 22),
                         filled: true,
                         fillColor: AppTheme.inputBackground,
@@ -240,7 +254,7 @@ class _AuthPageState extends State<AuthPage> {
                       style: TextStyle(color: AppTheme.inputText, fontSize: 16),
                       decoration: InputDecoration(
                         hintText: 'Email',
-                        hintStyle: TextStyle(color: AppTheme.inputText.withOpacity(0.7)),
+                        hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
                         prefixIcon: Icon(Icons.mail_outline, color: AppTheme.inputText, size: 22),
                         filled: true,
                         fillColor: AppTheme.inputBackground,
@@ -262,7 +276,7 @@ class _AuthPageState extends State<AuthPage> {
                       onChanged: (_) => setSheetState(() {}),
                       decoration: InputDecoration(
                         hintText: 'Password',
-                        hintStyle: TextStyle(color: AppTheme.inputText.withOpacity(0.7)),
+                        hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
                         prefixIcon: Icon(Icons.lock_outline, color: AppTheme.inputText, size: 22),
                         filled: true,
                         fillColor: AppTheme.inputBackground,
@@ -381,7 +395,7 @@ class _AuthPageState extends State<AuthPage> {
       style: TextStyle(color: AppTheme.inputText, fontSize: 16),
       decoration: InputDecoration(
         hintText: 'admin@hyperion.local',
-        hintStyle: TextStyle(color: AppTheme.inputText.withOpacity(0.7)),
+        hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
         prefixIcon: Icon(Icons.mail_outline, color: AppTheme.inputText, size: 22),
         filled: true,
         fillColor: AppTheme.inputBackground,
@@ -408,7 +422,7 @@ class _AuthPageState extends State<AuthPage> {
       style: TextStyle(color: AppTheme.inputText, fontSize: 16),
       decoration: InputDecoration(
         hintText: '••••••',
-        hintStyle: TextStyle(color: AppTheme.inputText.withOpacity(0.7)),
+        hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
         prefixIcon: Icon(Icons.lock_outline, color: AppTheme.inputText, size: 22),
         suffixIcon: IconButton(
           icon: Icon(
@@ -445,10 +459,17 @@ class _AuthPageState extends State<AuthPage> {
       child: FilledButton(
         onPressed: isLoading || locked
             ? null
-            : () => notifier.signIn(
-                  _emailController.text.trim(),
-                  _passwordController.text.trim(),
-                ),
+            : () async {
+                final email = _emailController.text.trim();
+                final pw = _passwordController.text.trim();
+                await notifier.signIn(email, pw);
+                if (!mounted) return;
+                // Save credentials so the user can sign in with biometrics next time.
+                final bio = BiometricScope.maybeOf(context);
+                if (bio != null && bio.isAvailable && notifier.lastError == null) {
+                  await bio.saveCredentials(email, pw);
+                }
+              },
         style: FilledButton.styleFrom(
           backgroundColor: AppTheme.buttonPrimary,
           foregroundColor: AppTheme.textPrimary,
@@ -561,7 +582,7 @@ class _AuthPageState extends State<AuthPage> {
                       'Password reset successfully. Please sign in.',
                       style: const TextStyle(color: AppTheme.textPrimary),
                     ),
-                    backgroundColor: AppTheme.statusOnline.withOpacity(0.8),
+                    backgroundColor: AppTheme.statusOnline.withValues(alpha:0.8),
                     behavior: SnackBarBehavior.floating,
                     margin: const EdgeInsets.all(16),
                     duration: const Duration(seconds: 4),
@@ -612,7 +633,7 @@ class _AuthPageState extends State<AuthPage> {
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
                         value: (step + 1) / 3,
-                        backgroundColor: AppTheme.inputBorder.withOpacity(0.3),
+                        backgroundColor: AppTheme.inputBorder.withValues(alpha:0.3),
                         valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentLink),
                         minHeight: 4,
                       ),
@@ -642,7 +663,7 @@ class _AuthPageState extends State<AuthPage> {
                         style: TextStyle(color: AppTheme.inputText, fontSize: 16),
                         decoration: inputDecoration.copyWith(
                           hintText: 'Email address',
-                          hintStyle: TextStyle(color: AppTheme.inputText.withOpacity(0.7)),
+                          hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
                           prefixIcon: Icon(Icons.mail_outline, color: AppTheme.inputText, size: 22),
                         ),
                       ),
@@ -671,7 +692,7 @@ class _AuthPageState extends State<AuthPage> {
                           counterText: '',
                           hintText: '------',
                           hintStyle: TextStyle(
-                            color: AppTheme.inputText.withOpacity(0.3),
+                            color: AppTheme.inputText.withValues(alpha:0.3),
                             fontSize: 30,
                             letterSpacing: 10,
                           ),
@@ -714,7 +735,7 @@ class _AuthPageState extends State<AuthPage> {
                         style: TextStyle(color: AppTheme.inputText, fontSize: 16),
                         decoration: inputDecoration.copyWith(
                           hintText: 'New password',
-                          hintStyle: TextStyle(color: AppTheme.inputText.withOpacity(0.7)),
+                          hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
                           prefixIcon: Icon(Icons.lock_outline, color: AppTheme.inputText, size: 22),
                           suffixIcon: IconButton(
                             icon: Icon(
@@ -784,7 +805,7 @@ class _AuthPageState extends State<AuthPage> {
         style: FilledButton.styleFrom(
           backgroundColor: AppTheme.buttonPrimary,
           foregroundColor: AppTheme.textPrimary,
-          disabledBackgroundColor: AppTheme.buttonPrimary.withOpacity(0.5),
+          disabledBackgroundColor: AppTheme.buttonPrimary.withValues(alpha:0.5),
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusButton),
@@ -798,6 +819,60 @@ class _AuthPageState extends State<AuthPage> {
               )
             : Text(label),
       ),
+    );
+  }
+
+  Widget _buildBiometricButton(bool isLoading) {
+    final bio = BiometricScope.maybeOf(context);
+    if (bio == null || !bio.canSignInWithBiometrics) return const SizedBox.shrink();
+
+    final busy = isLoading || bio.isBiometricSigningIn;
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        SizedBox(
+          width: 64,
+          height: 64,
+          child: OutlinedButton(
+            onPressed: busy
+                ? null
+                : () async {
+                    // If multiple accounts are stored the UI layer should show
+                    // an account picker and call authenticateAndGetCredentials
+                    // with the chosen account. For now we use the most recently
+                    // added account (last in list).
+                    final account = bio.savedAccounts.last;
+                    final creds =
+                        await bio.authenticateAndGetCredentials(account);
+                    if (!mounted || creds == null) return;
+                    await AuthScope.of(context).signIn(
+                      creds.usernameOrEmail,
+                      creds.password,
+                    );
+                  },
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.zero,
+              shape: const CircleBorder(),
+              side: BorderSide(color: AppTheme.inputBorder, width: 1.5),
+            ),
+            child: busy
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.textPrimary,
+                    ),
+                  )
+                : Image.asset(
+                    'lib/HandFace.png',
+                    width: 36,
+                    height: 36,
+                    color: AppTheme.textPrimary,
+                  ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -828,11 +903,7 @@ class _AuthPageState extends State<AuthPage> {
               color: AppTheme.accentLink,
               decoration: TextDecoration.underline,
             ),
-            recognizer: TapGestureRecognizer()
-              ..onTap = () => launchUrl(
-                    Uri.parse(ApiConfig.privacyPolicyUrl),
-                    mode: LaunchMode.externalApplication,
-                  ),
+            recognizer: _privacyPolicyTapRecognizer,
           ),
           const TextSpan(text: '.'),
         ],

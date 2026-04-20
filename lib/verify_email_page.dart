@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
-import 'package:clietn_server_application/app_theme.dart';
-import 'package:clietn_server_application/auth/auth_api.dart';
-import 'package:clietn_server_application/auth/auth_scope.dart';
-import 'package:clietn_server_application/config/api_config.dart';
+import 'package:hyperion_flutter/app_theme.dart';
+import 'package:hyperion_flutter/auth/auth_api.dart';
+import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -19,6 +19,7 @@ class VerifyEmailPage extends StatefulWidget {
 
 class _VerifyEmailPageState extends State<VerifyEmailPage> {
   final _appLinks = AppLinks();
+  final http.Client _client = http.Client();
   StreamSubscription<Uri>? _sub;
   bool _busy = false;
   String? _message;
@@ -38,6 +39,7 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
   @override
   void dispose() {
     _sub?.cancel();
+    _client.close();
     super.dispose();
   }
 
@@ -64,7 +66,7 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
       }
 
       await postVerifyEmail(
-        http.Client(),
+        _client,
         ApiConfig.authBaseUrl,
         token: tokenStr,
         fallbackBaseUrl: ApiConfig.authFallbackUrl,
@@ -88,13 +90,14 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
     });
     try {
       final authToken = await AuthScope.of(context).getToken();
+      if (!mounted) return;
       if (authToken == null || authToken.isEmpty) {
         setState(() => _message = 'Session expired. Please sign in again.');
         await AuthScope.of(context).signOut();
         return;
       }
       await postResendVerification(
-        http.Client(),
+        _client,
         ApiConfig.authBaseUrl,
         token: authToken,
         fallbackBaseUrl: ApiConfig.authFallbackUrl,

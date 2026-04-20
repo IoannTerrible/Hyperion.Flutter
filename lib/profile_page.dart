@@ -1,17 +1,16 @@
 import 'dart:async';
 
-import 'package:clietn_server_application/app_theme.dart';
-import 'package:clietn_server_application/auth/auth_scope.dart';
-import 'package:clietn_server_application/logging/app_logger.dart';
-import 'package:clietn_server_application/auth/auth_state.dart';
-import 'package:clietn_server_application/base_page.dart';
-import 'package:clietn_server_application/config/api_config.dart';
-import 'package:clietn_server_application/devices/devices_api.dart';
-import 'package:clietn_server_application/devices/devices_scope.dart';
-import 'package:clietn_server_application/users/users_api.dart' as users_api;
-import 'package:clietn_server_application/plugins/plugin_scope.dart';
-import 'package:clietn_server_application/plugins/plugin_settings.dart';
-import 'package:clietn_server_application/widgets/error_with_retry.dart';
+import 'package:hyperion_flutter/app_theme.dart';
+import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
+import 'package:hyperion_flutter/auth/auth_state.dart';
+import 'package:hyperion_flutter/base_page.dart';
+import 'package:hyperion_flutter/config/api_config.dart';
+import 'package:hyperion_flutter/devices/devices_api.dart';
+import 'package:hyperion_flutter/devices/devices_scope.dart';
+import 'package:hyperion_flutter/users/users_api.dart' as users_api;
+import 'package:hyperion_flutter/plugins/plugin_scope.dart';
+import 'package:hyperion_flutter/widgets/error_with_retry.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -73,10 +72,11 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final notifier = AuthScope.of(context);
     return ListenableBuilder(
-      listenable: AuthScope.of(context),
+      listenable: notifier,
       builder: (context, _) {
-        final state = AuthScope.of(context).state;
+        final state = notifier.state;
         final auth = state is Authenticated ? state : null;
         final email = auth?.email ?? '—';
         return BasePage(
@@ -171,7 +171,7 @@ class _ProfileAvatar extends StatelessWidget {
                 width: 90,
                 height: 90,
                 fit: BoxFit.cover,
-                errorBuilder: (_, error, __) {
+                errorBuilder: (_, error, _) {
                   AppLogger.log('[ProfileAvatar] Failed to load avatar: $error');
                   return const Icon(Icons.person_outline, size: 48, color: AppTheme.profileAvatarIcon);
                 },
@@ -257,6 +257,7 @@ class _EditProfileBlockState extends State<_EditProfileBlock> {
         ),
         fallbackBaseUrl: ApiConfig.authFallbackUrl,
       );
+      if (!mounted) return;
       await AuthScope.of(context).tryRefreshSession();
       if (!mounted) return;
       setState(() {
@@ -282,6 +283,7 @@ class _EditProfileBlockState extends State<_EditProfileBlock> {
       if (token == null || token.isEmpty) throw Exception('No token');
       final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
       if (file == null) return;
+      if (!mounted) return;
       AppLogger.log('[ProfilePage._pickAndUploadAvatar] Uploading: ${file.name} (${file.path})');
       final oldAvatarUrl = (AuthScope.of(context).state as Authenticated?)?.avatarUrl;
       await users_api.putMyAvatar(
@@ -292,6 +294,7 @@ class _EditProfileBlockState extends State<_EditProfileBlock> {
         fallbackBaseUrl: ApiConfig.authFallbackUrl,
       );
       _evictAvatarCache(oldAvatarUrl);
+      if (!mounted) return;
       await AuthScope.of(context).tryRefreshSession();
       if (!mounted) return;
       setState(() => _msg = 'Avatar updated');
@@ -334,6 +337,7 @@ class _EditProfileBlockState extends State<_EditProfileBlock> {
     try {
       final token = await _token();
       if (token == null || token.isEmpty) throw Exception('No token');
+      if (!mounted) return;
       AppLogger.log('[ProfilePage._deleteAvatar] Deleting avatar');
       final oldAvatarUrl = (AuthScope.of(context).state as Authenticated?)?.avatarUrl;
       await users_api.deleteMyAvatar(
@@ -343,6 +347,7 @@ class _EditProfileBlockState extends State<_EditProfileBlock> {
         fallbackBaseUrl: ApiConfig.authFallbackUrl,
       );
       _evictAvatarCache(oldAvatarUrl);
+      if (!mounted) return;
       await AuthScope.of(context).tryRefreshSession();
       if (!mounted) return;
       setState(() => _msg = 'Avatar deleted');
@@ -592,8 +597,9 @@ class _SessionsBlockState extends State<_SessionsBlock> {
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() => _sessionsFuture = DevicesScope.of(context).getSessions());
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (!mounted) return;
+      setState(() => _sessionsFuture = DevicesScope.of(context).getSessions());
     });
   }
 
@@ -835,6 +841,12 @@ class _DeleteAccountButtonState extends State<_DeleteAccountButton> {
   bool _busy = false;
   final _client = http.Client();
 
+  @override
+  void dispose() {
+    _client.close();
+    super.dispose();
+  }
+
   Future<void> _requestDelete() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -961,9 +973,9 @@ class _DebugInfoBlock extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppTheme.profileCard.withOpacity(0.5),
+          color: AppTheme.profileCard.withValues(alpha:0.5),
           borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-          border: Border.all(color: AppTheme.textSecondary.withOpacity(0.2)),
+          border: Border.all(color: AppTheme.textSecondary.withValues(alpha:0.2)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

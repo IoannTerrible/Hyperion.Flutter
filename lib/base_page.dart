@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:clietn_server_application/app_theme.dart';
+import 'package:hyperion_flutter/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// Base page with gradient background and no other elements. All tab pages inherit from this.

@@ -1,4 +1,4 @@
-import 'package:clietn_server_application/app_theme.dart';
+import 'package:hyperion_flutter/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// Error message with Retry button in app style.
