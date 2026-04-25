@@ -70,15 +70,13 @@ class _DevicesScopeState extends State<DevicesScope> {
     if (auth is! Authenticated || auth.isDemo) return;
     final deviceId = auth.deviceId;
     if (deviceId == null || deviceId.isEmpty) {
-      AppLogger.log('[DevicesScope] _registerDevice: no deviceId, skipping');
+      AppLogger.log('[DevicesScope] Device registration skipped: no device ID assigned');
       return;
     }
     final name = await _deviceName();
-    AppLogger.log('[DevicesScope] _registerDevice: deviceId=$deviceId name="$name"');
+    AppLogger.log('[DevicesScope] Registering this device: "$name"');
     await widget.service.registerDevice(deviceId, name);
-    // Bump version so dependent pages (DevicePage) know to refresh their data.
     if (mounted) setState(() => _version++);
-    AppLogger.log('[DevicesScope] _registerDevice: done, version=$_version');
   }
 
   @override

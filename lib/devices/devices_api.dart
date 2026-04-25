@@ -12,12 +12,14 @@ class Plugin {
   final String name;
   final bool enabled;
   final String? icon;
+  final String? description;
 
   const Plugin({
     required this.id,
     required this.name,
     required this.enabled,
     this.icon,
+    this.description,
   });
 
   factory Plugin.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class Plugin {
       name: json['name'] as String? ?? '',
       enabled: json['enabled'] as bool? ?? false,
       icon: json['icon'] as String?,
+      description: json['description'] as String?,
     );
   }
 }
@@ -110,6 +113,32 @@ class Session {
   }
 }
 
+/// Minimal instance summary from GET /api/instances (PluginService).
+class InstanceSummary {
+  final String instanceId;
+  final DateTime lastUpdatedAt;
+  final String? clientType;
+  final String? label;
+
+  const InstanceSummary({
+    required this.instanceId,
+    required this.lastUpdatedAt,
+    this.clientType,
+    this.label,
+  });
+
+  factory InstanceSummary.fromJson(Map<String, dynamic> json) {
+    return InstanceSummary(
+      instanceId: json['instanceId'] as String? ?? '',
+      lastUpdatedAt: json['lastUpdatedAt'] != null
+          ? (DateTime.tryParse(json['lastUpdatedAt'] as String)?.toLocal() ?? DateTime.now())
+          : DateTime.now(),
+      clientType: json['clientType'] as String?,
+      label: json['label'] as String?,
+    );
+  }
+}
+
 class RegisterDeviceRequest {
   final String deviceId;
   final String name;
@@ -148,6 +177,12 @@ List<Session> _decodeSessionList(String body) {
   return list.map((e) => Session.fromJson(e as Map<String, dynamic>)).toList();
 }
 
+List<InstanceSummary> _decodeInstanceList(String body) {
+  final list = jsonDecode(body);
+  if (list is! List) return [];
+  return list.map((e) => InstanceSummary.fromJson(e as Map<String, dynamic>)).toList();
+}
+
 // --- API calls ---
 
 const _jsonAccept = {'Accept': 'application/json'};
@@ -171,8 +206,8 @@ Future<void> registerDevice(
   ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] POST $uri -> ${response.statusCode}');
-  AppLogger.log('[devices_api] Response body: ${response.body}');
+  AppLogger.log('[DevicesApi] Device registration rejected (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
@@ -198,8 +233,8 @@ Future<List<Device>> getDevices(
     }
   }
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] GET $uri -> ${response.statusCode}');
-  AppLogger.log('[devices_api] Response body: ${response.body}');
+  AppLogger.log('[DevicesApi] Failed to load devices (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
@@ -220,7 +255,7 @@ Future<void> deleteDevice(
   ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] DELETE $uri -> ${response.statusCode}');
+  AppLogger.log('[DevicesApi] Failed to delete device (HTTP ${response.statusCode})');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
@@ -246,8 +281,63 @@ Future<List<Plugin>> getPluginCatalog(
     }
   }
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] GET $uri -> ${response.statusCode}');
-  AppLogger.log('[devices_api] Response body: ${response.body}');
+  AppLogger.log('[DevicesApi] Failed to load plugins (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
+/// GET /api/instances/{instanceId}/plugins — plugin list with real enabled state.
+Future<List<Plugin>> getInstancePlugins(
+  http.Client client,
+  String baseUrl,
+  String token,
+  String instanceId,
+) async {
+  final uri = Uri.parse('$baseUrl/api/instances/$instanceId/plugins');
+  final response = await client.get(
+    uri,
+    headers: {
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+  ).timeout(const Duration(seconds: 30));
+  if (response.statusCode == 200) {
+    try {
+      return await compute(_decodePluginCatalog, response.body);
+    } catch (_) {
+      throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
+    }
+  }
+  final message = problemDetailsDetail(response.body);
+  AppLogger.log('[DevicesApi] Failed to load instance plugins (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
+  throw DevicesApiException(message, statusCode: response.statusCode);
+}
+
+/// GET /api/instances — all instances that have plugin records for the current user.
+Future<List<InstanceSummary>> getInstances(
+  http.Client client,
+  String baseUrl,
+  String token,
+) async {
+  final uri = Uri.parse('$baseUrl/api/instances');
+  final response = await client.get(
+    uri,
+    headers: {
+      ..._jsonAccept,
+      'Authorization': 'Bearer $token',
+    },
+  ).timeout(const Duration(seconds: 30));
+  if (response.statusCode == 200) {
+    try {
+      return await compute(_decodeInstanceList, response.body);
+    } catch (_) {
+      throw DevicesApiException('Unexpected server response', statusCode: response.statusCode);
+    }
+  }
+  final message = problemDetailsDetail(response.body);
+  AppLogger.log('[DevicesApi] Failed to load instances (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
@@ -273,8 +363,8 @@ Future<List<Session>> getSessions(
     }
   }
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] GET $uri -> ${response.statusCode}');
-  AppLogger.log('[devices_api] Response body: ${response.body}');
+  AppLogger.log('[DevicesApi] Failed to load sessions (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
@@ -295,7 +385,7 @@ Future<void> deleteSession(
   ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] DELETE $uri -> ${response.statusCode}');
+  AppLogger.log('[DevicesApi] Failed to revoke session (HTTP ${response.statusCode})');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
@@ -321,8 +411,8 @@ Future<void> patchPluginEnabled(
   ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] PATCH $uri -> ${response.statusCode}');
-  AppLogger.log('[devices_api] Response body: ${response.body}');
+  AppLogger.log('[DevicesApi] Failed to toggle plugin (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 
@@ -345,8 +435,8 @@ Future<void> uploadLogs(
   ).timeout(const Duration(seconds: 30));
   if (response.statusCode >= 200 && response.statusCode < 300) return;
   final message = problemDetailsDetail(response.body);
-  AppLogger.log('[devices_api] POST $uri -> ${response.statusCode}');
-  AppLogger.log('[devices_api] Response body: ${response.body}');
+  AppLogger.log('[DevicesApi] Log upload failed (HTTP ${response.statusCode})');
+  AppLogger.log('[DevicesApi] Server response: ${response.body}');
   throw DevicesApiException(message, statusCode: response.statusCode);
 }
 

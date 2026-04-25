@@ -38,8 +38,8 @@ Future<UserResponse> putMyProfile(
       },
       body: jsonEncode(request.toJson()),
     ).timeout(const Duration(seconds: 30));
-    AppLogger.log('[UsersApi.putMyProfile] Status: ${response.statusCode}');
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      AppLogger.log('[UsersApi] Profile updated successfully');
       try {
         final map = jsonDecode(response.body) as Map<String, dynamic>?;
         return UserResponse.fromJson(map ?? {});
@@ -48,7 +48,7 @@ Future<UserResponse> putMyProfile(
       }
     }
     final detail = problemDetailsDetail(response.body);
-    AppLogger.log('[UsersApi.putMyProfile] Error: $detail');
+    AppLogger.log('[UsersApi] Profile update failed (HTTP ${response.statusCode}): $detail');
     throw AuthApiException(detail, statusCode: response.statusCode);
   }
 
@@ -79,10 +79,12 @@ Future<void> deleteMyAvatar(
         'Authorization': 'Bearer $token',
       },
     ).timeout(const Duration(seconds: 30));
-    AppLogger.log('[UsersApi.deleteMyAvatar] Status: ${response.statusCode}');
-    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      AppLogger.log('[UsersApi] Avatar deleted successfully');
+      return;
+    }
     final detail = problemDetailsDetail(response.body);
-    AppLogger.log('[UsersApi.deleteMyAvatar] Error: $detail');
+    AppLogger.log('[UsersApi] Avatar deletion failed (HTTP ${response.statusCode}): $detail');
     throw AuthApiException(detail, statusCode: response.statusCode);
   }
 
@@ -114,10 +116,12 @@ Future<void> deleteMyAccount(
         'Authorization': 'Bearer $token',
       },
     ).timeout(const Duration(seconds: 30));
-    AppLogger.log('[UsersApi.deleteMyAccount] Status: ${response.statusCode}');
-    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      AppLogger.log('[UsersApi] Account deletion scheduled (24h grace period)');
+      return;
+    }
     final detail = problemDetailsDetail(response.body);
-    AppLogger.log('[UsersApi.deleteMyAccount] Error: $detail');
+    AppLogger.log('[UsersApi] Account deletion failed (HTTP ${response.statusCode}): $detail');
     throw AuthApiException(detail, statusCode: response.statusCode);
   }
 
@@ -156,8 +160,8 @@ Future<UserResponse> putMyAvatar(
 
     final streamed = await client.send(req).timeout(const Duration(seconds: 30));
     final response = await http.Response.fromStream(streamed);
-    AppLogger.log('[UsersApi.putMyAvatar] Status: ${response.statusCode}, File: ${file.name}');
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      AppLogger.log('[UsersApi] Avatar uploaded successfully: ${file.name}');
       try {
         final map = jsonDecode(response.body) as Map<String, dynamic>?;
         return UserResponse.fromJson(map ?? {});
@@ -166,7 +170,7 @@ Future<UserResponse> putMyAvatar(
       }
     }
     final detail = problemDetailsDetail(response.body);
-    AppLogger.log('[UsersApi.putMyAvatar] Error detail: $detail');
+    AppLogger.log('[UsersApi] Avatar upload failed (HTTP ${response.statusCode}): $detail');
     throw AuthApiException(detail, statusCode: response.statusCode);
   }
 
