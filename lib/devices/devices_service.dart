@@ -71,19 +71,19 @@ class DevicesService {
       name: name,
       deviceType: 'Phone',
     );
-    AppLogger.log('[DevicesService] registerDevice: $deviceId "$name"');
+    AppLogger.log('[DevicesService] Registering device "$name"');
     try {
       await api.registerDevice(_client, baseUrl, token, request);
-      AppLogger.log('[DevicesService] registerDevice: success');
+      AppLogger.log('[DevicesService] Device "$name" registered successfully');
     } catch (e) {
       if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
         try {
           await api.registerDevice(_client, fallbackBaseUrl, token, request);
         } catch (fallbackError) {
-          AppLogger.log('[DevicesService.registerDevice] Fallback also failed: $fallbackError');
+          AppLogger.log('[DevicesService] Device registration failed on both connections: $fallbackError');
         }
       } else {
-        AppLogger.log('[DevicesService.registerDevice] Registration failed (non-fatal): $e');
+        AppLogger.log('[DevicesService] Device registration failed: $e');
       }
     }
   }
@@ -92,25 +92,15 @@ class DevicesService {
 
   Future<List<api.Device>> getDevices() async {
     final state = _authNotifier.state;
-    if (state is! Authenticated) {
-      AppLogger.log('[DevicesService] getDevices: not authenticated -> stubs');
-      return stubDevices;
-    }
-    if (state.isDemo) {
-      AppLogger.log('[DevicesService] getDevices: demo mode -> stubs');
-      return stubDevices;
-    }
+    if (state is! Authenticated) return stubDevices;
+    if (state.isDemo) return stubDevices;
     final token = await _getValidToken();
-    if (token == null || token.isEmpty) {
-      AppLogger.log('[DevicesService] getDevices: no token -> stubs');
-      return stubDevices;
-    }
-    AppLogger.log('[DevicesService] getDevices: calling API');
+    if (token == null || token.isEmpty) return stubDevices;
     try {
       return await api.getDevices(_client, baseUrl, token);
     } on api.DevicesApiException catch (e) {
       if (e.statusCode == 401) {
-        AppLogger.log('[DevicesService] getDevices: 401 -> try refresh');
+        AppLogger.log('[DevicesService] Session expired, refreshing token');
         final newToken = await _refreshAndGetToken();
         if (newToken != null && newToken.isNotEmpty) {
           return await api.getDevices(_client, baseUrl, newToken);
@@ -161,36 +151,89 @@ class DevicesService {
     if (state.isDemo) return stubPluginCatalog;
     final token = await _getValidToken();
     if (token == null || token.isEmpty) return stubPluginCatalog;
-    AppLogger.log('[DevicesService] getPluginCatalog: calling API');
     try {
       return await api.getPluginCatalog(_client, pluginBaseUrl, token);
     } on api.DevicesApiException catch (e) {
       if (e.statusCode == 401) {
-        AppLogger.log('[DevicesService] getPluginCatalog: 401 -> try refresh');
+        AppLogger.log('[DevicesService] Session expired, refreshing token');
         final newToken = await _refreshAndGetToken();
         if (newToken != null && newToken.isNotEmpty) {
           try {
             return await api.getPluginCatalog(_client, pluginBaseUrl, newToken);
           } on api.DevicesApiException catch (e2) {
-            AppLogger.log('[DevicesService] getPluginCatalog: retry failed (${e2.statusCode}) -> stubs');
+            AppLogger.log('[DevicesService] Plugin catalog unavailable (HTTP ${e2.statusCode}), using defaults');
             return stubPluginCatalog;
           }
         }
       }
       // Plugin Service not deployed yet or endpoint unavailable — fall back gracefully.
-      AppLogger.log('[DevicesService] getPluginCatalog: error ${e.statusCode} -> stubs');
+      AppLogger.log('[DevicesService] Plugin catalog unavailable (HTTP ${e.statusCode}), using defaults');
       return stubPluginCatalog;
     } catch (e) {
       if (isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
         try {
           return await api.getPluginCatalog(_client, pluginFallbackUrl, token);
         } catch (_) {
-          AppLogger.log('[DevicesService] getPluginCatalog: fallback failed -> stubs');
+          AppLogger.log('[DevicesService] Plugin catalog unreachable, using defaults');
           return stubPluginCatalog;
         }
       }
-      AppLogger.log('[DevicesService] getPluginCatalog: unexpected error -> stubs: $e');
+      AppLogger.log('[DevicesService] Plugin catalog error: $e');
       return stubPluginCatalog;
+    }
+  }
+
+  // ── Instance plugins ───────────────────────────────────────────────────────
+
+  /// Returns plugins for a specific instance with their real enabled state.
+  Future<List<api.Plugin>> getInstancePlugins(String instanceId) async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated || state.isDemo) return [];
+    final token = await _getValidToken();
+    if (token == null || token.isEmpty) return [];
+    try {
+      return await api.getInstancePlugins(_client, pluginBaseUrl, token, instanceId);
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        AppLogger.log('[DevicesService] Session expired, refreshing token');
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          return await api.getInstancePlugins(_client, pluginBaseUrl, newToken, instanceId);
+        }
+      }
+      rethrow;
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
+        return await api.getInstancePlugins(_client, pluginFallbackUrl, token, instanceId);
+      }
+      rethrow;
+    }
+  }
+
+  // ── Instances (PluginService) ──────────────────────────────────────────────
+
+  /// Returns all Hyperion instances that have plugin records for the current user.
+  Future<List<api.InstanceSummary>> getInstances() async {
+    final state = _authNotifier.state;
+    if (state is! Authenticated || state.isDemo) return [];
+    final token = await _getValidToken();
+    if (token == null || token.isEmpty) return [];
+    try {
+      return await api.getInstances(_client, pluginBaseUrl, token);
+    } on api.DevicesApiException catch (e) {
+      if (e.statusCode == 401) {
+        AppLogger.log('[DevicesService] Session expired, refreshing token');
+        final newToken = await _refreshAndGetToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          return await api.getInstances(_client, pluginBaseUrl, newToken);
+        }
+      }
+      rethrow;
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && pluginFallbackUrl != pluginBaseUrl) {
+        return await api.getInstances(_client, pluginFallbackUrl, token);
+      }
+      rethrow;
     }
   }
 
@@ -198,25 +241,15 @@ class DevicesService {
 
   Future<List<api.Session>> getSessions() async {
     final state = _authNotifier.state;
-    if (state is! Authenticated) {
-      AppLogger.log('[DevicesService] getSessions: not authenticated -> stubs');
-      return stubSessions;
-    }
-    if (state.isDemo) {
-      AppLogger.log('[DevicesService] getSessions: demo mode -> stubs');
-      return stubSessions;
-    }
+    if (state is! Authenticated) return stubSessions;
+    if (state.isDemo) return stubSessions;
     final token = await _getValidToken();
-    if (token == null || token.isEmpty) {
-      AppLogger.log('[DevicesService] getSessions: no token -> stubs');
-      return stubSessions;
-    }
-    AppLogger.log('[DevicesService] getSessions: calling API');
+    if (token == null || token.isEmpty) return stubSessions;
     try {
       return await api.getSessions(_client, baseUrl, token);
     } on api.DevicesApiException catch (e) {
       if (e.statusCode == 401) {
-        AppLogger.log('[DevicesService] getSessions: 401 -> try refresh');
+        AppLogger.log('[DevicesService] Session expired, refreshing token');
         final newToken = await _refreshAndGetToken();
         if (newToken != null && newToken.isNotEmpty) {
           return await api.getSessions(_client, baseUrl, newToken);
@@ -272,7 +305,7 @@ class DevicesService {
       );
     } on api.DevicesApiException catch (e) {
       if (e.statusCode == 401) {
-        AppLogger.log('[DevicesService] patchPluginEnabled: 401 -> try refresh');
+        AppLogger.log('[DevicesService] Session expired, refreshing token');
         final newToken = await _refreshAndGetToken();
         if (newToken != null && newToken.isNotEmpty) {
           await api.patchPluginEnabled(
@@ -318,7 +351,7 @@ class DevicesService {
       return true;
     } on api.DevicesApiException catch (e) {
       if (e.statusCode == 401) {
-        AppLogger.log('[DevicesService] uploadLogs: 401 -> try refresh');
+        AppLogger.log('[DevicesService] Session expired, refreshing token');
         final newToken = await _refreshAndGetToken();
         if (newToken != null && newToken.isNotEmpty) {
           await api.uploadLogs(_client, baseUrl, newToken, content);

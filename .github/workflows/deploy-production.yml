@@ -1,0 +1,104 @@
+name: Deploy Flutter to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Setup Flutter ────────────────────────────────────────
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.7'
+          channel: 'stable'
+
+      # ── Install deps ─────────────────────────────────────────
+      - name: Get dependencies
+        run: flutter pub get
+
+      # ── Run tests (optional, non-blocking) ───────────────────
+      - name: Run tests (allow failure)
+        run: flutter test --reporter expanded
+        continue-on-error: true
+
+      # ── Build Flutter Web ────────────────────────────────────
+      - name: Build web
+        run: flutter build web --release --base-href /flutter/
+
+      # ── Prepare Docker tags ──────────────────────────────────
+      - name: Set lowercase owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      # ── Login to GHCR ────────────────────────────────────────
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Setup Docker Buildx ──────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Build & Push Docker image ────────────────────────────
+      - name: Build and push flutter image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/hyperion-flutter:latest
+            ghcr.io/${{ env.OWNER_LC }}/hyperion-flutter:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Copy compose file to server ──────────────────────────
+      - name: Copy compose file to server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_deploy \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "mkdir -p /opt/apps/flutter-web"
+          scp -i ~/.ssh/id_deploy docker-compose.yml \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/apps/flutter-web/docker-compose.yml
+
+      # ── Deploy flutter container ──────────────────────────────
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+          OWNER_LC: ${{ env.OWNER_LC }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          envs: GHCR_TOKEN,GHCR_ACTOR,OWNER_LC,DOMAIN
+          script: |
+            set -e
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+            cd /opt/apps/flutter-web
+            docker compose -p hyperion-flutter-web pull
+            docker compose -p hyperion-flutter-web up -d
+            docker image prune -f
+            echo "=== Deploy done ==="
+            docker inspect --format='{{.State.Status}}' hyperion-flutter-web

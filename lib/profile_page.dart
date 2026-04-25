@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:hyperion_flutter/app_theme.dart';
 import 'package:hyperion_flutter/auth/auth_scope.dart';
 import 'package:hyperion_flutter/logging/app_logger.dart';
+import 'package:hyperion_flutter/logging/logs_page.dart';
 import 'package:hyperion_flutter/auth/auth_state.dart';
 import 'package:hyperion_flutter/base_page.dart';
 import 'package:hyperion_flutter/config/api_config.dart';
@@ -284,7 +285,7 @@ class _EditProfileBlockState extends State<_EditProfileBlock> {
       final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
       if (file == null) return;
       if (!mounted) return;
-      AppLogger.log('[ProfilePage._pickAndUploadAvatar] Uploading: ${file.name} (${file.path})');
+      AppLogger.log('[ProfilePage] Uploading avatar: ${file.name}');
       final oldAvatarUrl = (AuthScope.of(context).state as Authenticated?)?.avatarUrl;
       await users_api.putMyAvatar(
         _client,
@@ -338,7 +339,7 @@ class _EditProfileBlockState extends State<_EditProfileBlock> {
       final token = await _token();
       if (token == null || token.isEmpty) throw Exception('No token');
       if (!mounted) return;
-      AppLogger.log('[ProfilePage._deleteAvatar] Deleting avatar');
+      AppLogger.log('[ProfilePage] Requesting avatar deletion');
       final oldAvatarUrl = (AuthScope.of(context).state as Authenticated?)?.avatarUrl;
       await users_api.deleteMyAvatar(
         _client,
@@ -590,17 +591,29 @@ class _SessionsBlock extends StatefulWidget {
 }
 
 class _SessionsBlockState extends State<_SessionsBlock> {
-  Future<List<Session>>? _sessionsFuture;
+  List<Session>? _sessions;
+  bool _loading = false;
+  Object? _error;
   bool _expanded = false;
+  bool _initialized = false;
   Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-      if (!mounted) return;
-      setState(() => _sessionsFuture = DevicesScope.of(context).getSessions());
-    });
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) { if (mounted) _load(); },
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      _load();
+    }
   }
 
   @override
@@ -609,105 +622,122 @@ class _SessionsBlockState extends State<_SessionsBlock> {
     super.dispose();
   }
 
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      final sessions = await DevicesScope.of(context).getSessions();
+      if (mounted) setState(() { _sessions = List.from(sessions); _loading = false; });
+    } catch (e) {
+      AppLogger.log('[ProfilePage] Failed to load activity sessions: $e');
+      if (mounted) setState(() { _error = e; _loading = false; });
+    }
+  }
+
+  Future<void> _revoke(Session session) async {
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Revoke session?', style: TextStyle(color: AppTheme.textPrimary)),
+        content: Text(
+          'The device "${session.name}" will be signed out.',
+          style: const TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.accentLink)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Revoke', style: TextStyle(color: AppTheme.profileAccentRed)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final current = _sessions;
+    if (current == null) return;
+    final backup = List<Session>.from(current);
+    setState(() => _sessions!.removeWhere((s) => s.id == session.id));
+    try {
+      await DevicesScope.of(context).revokeSession(session.id);
+      AppLogger.log('[ProfilePage] Revoked session: ${session.name}');
+    } catch (e) {
+      AppLogger.log('[ProfilePage] Failed to revoke session "${session.name}": $e');
+      if (!mounted) return;
+      setState(() => _sessions = backup);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to revoke: $e'),
+          backgroundColor: AppTheme.snackbarErrorBackground,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final service = DevicesScope.of(context);
-    _sessionsFuture ??= service.getSessions();
-    return FutureBuilder<List<Session>>(
-      future: _sessionsFuture,
-      builder: (context, snapshot) {
-        final isLoading = snapshot.connectionState == ConnectionState.waiting;
-        final sessions = snapshot.data ?? [];
+    final sessions = _sessions ?? [];
+    final initialLoading = _loading && _sessions == null;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            GestureDetector(
-              onTap: isLoading
-                  ? null
-                  : () => setState(() => _expanded = !_expanded),
-              behavior: HitTestBehavior.opaque,
-              child: Row(
-                children: [
-                  const Text(
-                    'Activity sessions',
-                    style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (isLoading)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    Icon(
-                      _expanded ? Icons.expand_less : Icons.expand_more,
-                      color: AppTheme.textSecondary,
-                      size: 22,
-                    ),
-                ],
-              ),
-            ),
-            if (snapshot.hasError) ...[
-              const SizedBox(height: 8),
-              Builder(builder: (ctx) {
-                AppLogger.log('[ProfilePage] Sessions error: ${snapshot.error}');
-                return ErrorWithRetry(
-                  message: _friendlyError(snapshot.error),
-                  onRetry: () => setState(() => _sessionsFuture = service.getSessions()),
-                  compact: true,
-                );
-              }),
-            ] else if (_expanded && sessions.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              for (var i = 0; i < sessions.length; i++) ...[
-                if (i > 0) const SizedBox(height: 10),
-                _SessionItem(
-                  session: sessions[i],
-                  onRevoke: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        backgroundColor: AppTheme.surface,
-                        title: const Text('Revoke session?', style: TextStyle(color: AppTheme.textPrimary)),
-                        content: Text(
-                          'The device "${sessions[i].name}" will be signed out.',
-                          style: const TextStyle(color: AppTheme.textSecondary),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: const Text('Cancel', style: TextStyle(color: AppTheme.accentLink)),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: Text('Revoke', style: TextStyle(color: AppTheme.profileAccentRed)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed != true || !context.mounted) return;
-                    try {
-                      await service.revokeSession(sessions[i].id);
-                      setState(() => _sessionsFuture = service.getSessions());
-                    } catch (e) {
-                      AppLogger.log('[ProfilePage] revokeSession error: $e');
-                    }
-                  },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          onTap: initialLoading ? null : () => setState(() => _expanded = !_expanded),
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            children: [
+              const Text(
+                'Activity sessions',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ] else if (_expanded && sessions.isEmpty && !isLoading) ...[
-              const SizedBox(height: 10),
-              Text('No active sessions', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+              ),
+              const Spacer(),
+              if (initialLoading)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  color: AppTheme.textSecondary,
+                  size: 22,
+                ),
             ],
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          ErrorWithRetry(
+            message: _friendlyError(_error),
+            onRetry: _load,
+            compact: true,
+          ),
+        ] else if (_expanded && sessions.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          for (var i = 0; i < sessions.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            _SessionItem(
+              session: sessions[i],
+              onRevoke: () => _revoke(sessions[i]),
+            ),
           ],
-        );
-      },
+        ] else if (_expanded && sessions.isEmpty && !_loading) ...[
+          const SizedBox(height: 10),
+          Text('No active sessions', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+        ],
+      ],
     );
   }
 }
@@ -759,27 +789,50 @@ class _UploadLogsButtonState extends State<_UploadLogsButton> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _uploading ? null : () => _onUpload(context),
-        icon: _uploading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.upload_file_outlined, size: 20),
-        label: Text(_uploading ? 'Uploading...' : 'Upload logs'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppTheme.textPrimary,
-          side: const BorderSide(color: AppTheme.textSecondary),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+    final buttonStyle = OutlinedButton.styleFrom(
+      foregroundColor: AppTheme.textPrimary,
+      side: const BorderSide(color: AppTheme.textSecondary),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+      ),
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _uploading ? null : () => _onUpload(context),
+            icon: _uploading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.upload_file_outlined, size: 20),
+            label: Text(_uploading ? 'Uploading...' : 'Upload logs'),
+            style: buttonStyle,
           ),
         ),
-      ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LogsPage()),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.textPrimary,
+            side: const BorderSide(color: AppTheme.textSecondary),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+            ),
+          ),
+          child: const Icon(Icons.list_alt, size: 20),
+        ),
+      ],
     );
   }
 }
@@ -909,7 +962,7 @@ class _DeleteAccountButtonState extends State<_DeleteAccountButton> {
         token,
         fallbackBaseUrl: ApiConfig.authFallbackUrl,
       );
-      AppLogger.log('[ProfilePage] Account deletion scheduled');
+      AppLogger.log('[ProfilePage] Account deletion requested, signing out');
       if (!mounted) return;
       await AuthScope.of(context).signOut();
     } catch (e) {

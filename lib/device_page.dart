@@ -3,19 +3,23 @@ import 'package:hyperion_flutter/base_page.dart';
 import 'package:hyperion_flutter/logging/app_logger.dart';
 import 'package:hyperion_flutter/devices/devices_api.dart';
 import 'package:hyperion_flutter/devices/devices_scope.dart';
+import 'package:hyperion_flutter/devices/devices_service.dart';
+import 'package:hyperion_flutter/instance_plugins_page.dart';
 import 'package:hyperion_flutter/widgets/error_with_retry.dart';
 import 'package:flutter/material.dart';
 
-IconData _deviceIcon(String? icon) {
-  switch (icon) {
-    case 'smartphone':
-      return Icons.smartphone_outlined;
-    case 'desktop':
-      return Icons.desktop_windows_outlined;
-    default:
-      return Icons.devices_other;
-  }
+String _formatRelativeTime(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inSeconds < 60) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return '${dt.day}/${dt.month}/${dt.year}';
 }
+
+typedef _PageData = ({
+  List<InstanceSummary> instances,
+});
 
 class DevicePage extends StatefulWidget {
   const DevicePage({super.key});
@@ -25,59 +29,63 @@ class DevicePage extends StatefulWidget {
 }
 
 class _DevicePageState extends State<DevicePage> {
-  Future<List<Device>>? _devicesFuture;
+  Future<_PageData>? _dataFuture;
   int _lastVersion = -1;
 
-  /// Called whenever an InheritedWidget dependency changes.
-  /// Resets the device list when DevicesScope bumps its version
-  /// (e.g. after device registration completes).
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final version = DevicesScope.versionOf(context);
     if (version != _lastVersion) {
       _lastVersion = version;
-      _devicesFuture = null; // will be re-fetched in build
+      _dataFuture = null;
     }
+  }
+
+  Future<_PageData> _load(DevicesService service) async {
+    return (
+      instances: await service.getInstances(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final service = DevicesScope.of(context);
-    _devicesFuture ??= service.getDevices();
+    _dataFuture ??= _load(service);
     return BasePage(
-      child: FutureBuilder<List<Device>>(
-        future: _devicesFuture,
+      child: FutureBuilder<_PageData>(
+        future: _dataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            AppLogger.log('[DevicePage] Error: ${snapshot.error}');
-            AppLogger.log('[DevicePage] StackTrace: ${snapshot.stackTrace}');
+            AppLogger.log('[DevicePage] Failed to load: ${snapshot.error}');
             return Center(
               child: ErrorWithRetry(
                 message: snapshot.error.toString(),
-                onRetry: () =>
-                    setState(() => _devicesFuture = service.getDevices()),
+                onRetry: () => setState(() => _dataFuture = _load(service)),
               ),
             );
           }
-          final devices = snapshot.data ?? [];
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
+          final data = snapshot.data!;
+
+          return RefreshIndicator(
+            onRefresh: () {
+              setState(() => _dataFuture = _load(service));
+              return _dataFuture!;
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.chevron_left,
-                        color: AppTheme.textPrimary,
-                        size: 28,
-                      ),
+                      Icon(Icons.chevron_left, color: AppTheme.textPrimary, size: 28),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -94,37 +102,54 @@ class _DevicePageState extends State<DevicePage> {
                 ),
                 Divider(
                   height: 1,
-                  color: AppTheme.textSecondary.withValues(alpha:0.3),
+                  color: AppTheme.textSecondary.withValues(alpha: 0.3),
                   thickness: 1,
                 ),
                 const SizedBox(height: 14),
-                ...devices.map(
-                  (device) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.devicesCard,
-                        borderRadius:
-                            BorderRadius.circular(AppTheme.radiusPluginsCard),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha:0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+
+                // ── Hyperion instances (from PluginService) ──
+                if (data.instances.isNotEmpty) ...[
+                  _SectionHeader(label: 'Hyperion Instances'),
+                  const SizedBox(height: 8),
+                  ...data.instances.map(
+                    (inst) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _InstanceTile(instance: inst, service: service),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                if (data.instances.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.desktop_windows_outlined,
+                              color: AppTheme.textSecondary.withValues(alpha: 0.5),
+                              size: 48),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No Hyperion instances found',
+                            style: TextStyle(
+                                color: AppTheme.textSecondary, fontSize: 15),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Launch Hyperion on a desktop or web\nbrowser to see it here.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: AppTheme.textSecondary.withValues(alpha: 0.65),
+                                fontSize: 13),
                           ),
                         ],
                       ),
-                      child: _DeviceCard(
-                        icon: _deviceIcon(device.icon),
-                        name: device.name,
-                        isOnline: device.status == 'Online',
-                        instances: device.instances,
-                      ),
                     ),
                   ),
-                ),
               ],
+              ),
             ),
           );
         },
@@ -133,101 +158,162 @@ class _DevicePageState extends State<DevicePage> {
   }
 }
 
-class _DeviceCard extends StatelessWidget {
-  final IconData icon;
-  final String name;
-  final bool isOnline;
-  final List<Instance>? instances;
-
-  const _DeviceCard({
-    required this.icon,
-    required this.name,
-    required this.isOnline,
-    this.instances,
-  });
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label});
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final Color statusColor =
-        isOnline ? AppTheme.statusOnline : AppTheme.statusOffline;
-    final String statusLabel = isOnline ? 'Online' : 'Offline';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: AppTheme.textPrimary, size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                name,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: statusColor,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                statusLabel,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (instances != null && instances!.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          ...instances!.map(
-            (inst) => Padding(
-              padding: const EdgeInsets.only(left: 36, bottom: 6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: inst.status == 'Running'
-                              ? AppTheme.statusRunning
-                              : AppTheme.statusStopped,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        inst.name,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        inst.status,
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ],
+    return Text(
+      label,
+      style: TextStyle(
+        color: AppTheme.textSecondary,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.6,
+      ),
     );
   }
 }
+
+IconData _clientTypeIcon(String? clientType) {
+  switch (clientType) {
+    case 'web':
+      return Icons.language;
+    case 'desktop':
+      return Icons.desktop_windows_outlined;
+    default:
+      return Icons.desktop_windows_outlined;
+  }
+}
+
+class _InstanceTile extends StatelessWidget {
+  const _InstanceTile({required this.instance, required this.service});
+
+  final InstanceSummary instance;
+  final DevicesService service;
+
+  String _displayName() {
+    if (instance.label != null && instance.label!.isNotEmpty) {
+      return instance.label!;
+    }
+    final uuidPattern = RegExp(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        caseSensitive: false);
+    if (uuidPattern.hasMatch(instance.instanceId)) {
+      return 'Instance ${instance.instanceId.substring(0, 8).toUpperCase()}';
+    }
+    return instance.instanceId;
+  }
+
+  bool get _isOnline =>
+      DateTime.now().difference(instance.lastUpdatedAt).inSeconds < 60;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _displayName();
+    return _ClientTile(
+      icon: _clientTypeIcon(instance.clientType),
+      name: name,
+      subtitle: 'Last active ${_formatRelativeTime(instance.lastUpdatedAt)}',
+      isOnline: _isOnline,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => InstancePluginsPage(
+            instanceId: instance.instanceId,
+            instanceName: name,
+            service: service,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClientTile extends StatelessWidget {
+  const _ClientTile({
+    required this.icon,
+    required this.name,
+    required this.onTap,
+    this.subtitle,
+    this.isOnline,
+  });
+
+  final IconData icon;
+  final String name;
+  final String? subtitle;
+  final bool? isOnline;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.devicesCard,
+      borderRadius: BorderRadius.circular(AppTheme.radiusPluginsCard),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusPluginsCard),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radiusPluginsCard),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: AppTheme.textPrimary, size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (isOnline != null) ...[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: isOnline!
+                        ? AppTheme.statusOnline
+                        : AppTheme.textSecondary.withValues(alpha: 0.4),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Icon(Icons.chevron_right, color: AppTheme.textSecondary, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

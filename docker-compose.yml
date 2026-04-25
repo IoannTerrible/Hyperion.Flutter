@@ -1,0 +1,18 @@
+networks:
+  hyperion_net:
+    external: true
+
+services:
+  flutter-web:
+    image: ghcr.io/${OWNER_LC}/hyperion-flutter:latest
+    pull_policy: always
+    container_name: hyperion-flutter-web
+    restart: unless-stopped
+    labels:
+      caddy: "${DOMAIN:-hyperion.techteastudio.cc}"
+      caddy.handle_path: "/flutter*"
+      caddy.handle_path.reverse_proxy: "{{upstreams 80}}"
+    networks:
+      hyperion_net:
+        aliases:
+          - flutter-web

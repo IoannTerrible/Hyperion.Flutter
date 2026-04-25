@@ -4,6 +4,7 @@ import 'package:hyperion_flutter/auth/auth_api.dart';
 import 'package:hyperion_flutter/auth/auth_state.dart';
 import 'package:hyperion_flutter/auth/auth_service.dart';
 import 'package:hyperion_flutter/common/network_utils.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -166,6 +167,7 @@ class RealAuthService implements AuthService {
     }
     await _saveAuth(result);
     await _notifyFromResult(result);
+    AppLogger.log('[Auth] Signed in as $usernameOrEmail');
   }
 
   @override
@@ -186,6 +188,7 @@ class RealAuthService implements AuthService {
     }
     await _saveAuth(result);
     await _notifyFromResult(result);
+    AppLogger.log('[Auth] Registered as $email');
   }
 
   @override
@@ -217,6 +220,7 @@ class RealAuthService implements AuthService {
 
   @override
   void signInAsDemo() {
+    AppLogger.log('[Auth] Signed in as demo user');
     onStateChanged(const Authenticated(
       email: 'demo@local',
       userId: null,
@@ -245,6 +249,7 @@ class RealAuthService implements AuthService {
         // Best-effort: still clear local state.
       }
     }
+    AppLogger.log('[Auth] Signed out');
     await _storage.delete(key: _keyToken);
     await _storage.delete(key: _keyRefreshToken);
     await _storage.delete(key: _keyUserId);
@@ -282,6 +287,7 @@ class RealAuthService implements AuthService {
         return;
       }
       await _notifyFromResult(result);
+      AppLogger.log('[Auth] Session restored');
     } catch (_) {
       await _storage.delete(key: _keyToken);
       await _storage.delete(key: _keyRefreshToken);

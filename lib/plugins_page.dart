@@ -78,7 +78,7 @@ class _PluginsPageState extends State<PluginsPage> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            AppLogger.log('[PluginsPage] Error: ${snapshot.error}');
+            AppLogger.log('[PluginsPage] Failed to load plugin catalog: ${snapshot.error}');
             return Center(
               child: ErrorWithRetry(
                 message: snapshot.error.toString(),
