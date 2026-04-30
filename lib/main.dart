@@ -243,17 +243,17 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
             filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
               decoration: BoxDecoration(
-                // Dark navy tint at ~50% — lets the blurred content show through.
-                color: const Color(0xFF0D0D1B).withValues(alpha: 0.55),
+                // App background tint at ~55% — lets the blurred content show through.
+                color: AppTheme.background.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-                // Thin white rim — the "glass edge" specular highlight.
+                // Thin rim using textPrimary (white) — the glass edge highlight.
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.14),
+                  color: AppTheme.textPrimary.withValues(alpha: 0.14),
                   width: 0.6,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    color: AppTheme.background.withValues(alpha: 0.6),
                     blurRadius: 24,
                     spreadRadius: -4,
                     offset: const Offset(0, 8),
