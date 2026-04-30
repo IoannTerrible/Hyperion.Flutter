@@ -290,6 +290,11 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
   late final List<AnimationController> _shimmerCtrls;
   late final List<Animation<double>> _shimmerAnim;
 
+  // Allocated once — passing a fresh ImageFilter every build forces the
+  // backdrop layer to re-evaluate its filter pipeline.
+  static final ImageFilter _kGlassBlur =
+      ImageFilter.blur(sigmaX: 12, sigmaY: 12);
+
   @override
   void initState() {
     super.initState();
@@ -320,54 +325,76 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
     // Fire shimmer: ramp up, then fade out automatically.
     _shimmerCtrls[index]
       ..stop()
-      ..forward(from: 0).then((_) => _shimmerCtrls[index].reverse());
+      ..forward(from: 0).then((_) {
+        if (!mounted) return;
+        _shimmerCtrls[index].reverse();
+      });
     widget.onTap(index);
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final tabW      = constraints.maxWidth / _kNavItems.length;
-        final bubbleLeft = widget.currentIndex * tabW + (tabW - _kBubbleW) / 2;
+    final radius = BorderRadius.circular(AppTheme.radiusCard);
 
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              height: _kNavHeight,
-              decoration: BoxDecoration(
-                // Grey surface tint — same family as the old solid bar, but
-                // translucent so the blur shows through.
-                color: AppTheme.surface.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-                border: Border.all(
-                  color: AppTheme.textPrimary.withValues(alpha: 0.14),
-                  width: 0.6,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.background.withValues(alpha: 0.6),
-                    blurRadius: 24,
-                    spreadRadius: -4,
-                    offset: const Offset(0, 8),
+    // Top-level RepaintBoundary keeps page-body repaints from also dirtying
+    // the nav-bar layer. Equally important: the blur layer is a static
+    // sibling at the bottom of the Stack, isolated by its own RepaintBoundary
+    // — animations (bubble, scale, shimmer) on top no longer mark the
+    // BackdropFilter dirty, so the gaussian blur is rasterized at most once
+    // per tab swap rather than on every animation frame.
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tabW = constraints.maxWidth / _kNavItems.length;
+          final bubbleLeft =
+              widget.currentIndex * tabW + (tabW - _kBubbleW) / 2;
+
+          return SizedBox(
+            height: _kNavHeight,
+            child: Stack(
+              children: [
+                // ── Static glass layer (blur + tint + rim + shadow) ─────
+                Positioned.fill(
+                  child: RepaintBoundary(
+                    child: ClipRRect(
+                      borderRadius: radius,
+                      child: BackdropFilter(
+                        filter: _kGlassBlur,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: AppTheme.surface.withValues(alpha: 0.45),
+                            borderRadius: radius,
+                            border: Border.all(
+                              color:
+                                  AppTheme.textPrimary.withValues(alpha: 0.14),
+                              width: 0.6,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    AppTheme.background.withValues(alpha: 0.6),
+                                blurRadius: 16,
+                                spreadRadius: -4,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  // ── Sliding selection bubble ──────────────────────────────
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 320),
-                    curve: Curves.easeOutBack,
-                    left: bubbleLeft,
-                    top: _kBubbleTop,
-                    width: _kBubbleW,
-                    height: _kBubbleH,
-                    child: Container(
+                ),
+                // ── Sliding selection bubble ───────────────────────────
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutBack,
+                  left: bubbleLeft,
+                  top: _kBubbleTop,
+                  width: _kBubbleW,
+                  height: _kBubbleH,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
-                        // Subtle surfaceSelected tint — glass-on-glass, not solid.
                         color: AppTheme.surfaceSelected.withValues(alpha: 0.22),
                         borderRadius: BorderRadius.circular(_kBubbleH / 2),
                         border: Border.all(
@@ -377,12 +404,14 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
                       ),
                     ),
                   ),
-                  // ── Tab items ─────────────────────────────────────────────
-                  Row(
-                    children: List.generate(_kNavItems.length, (i) {
-                      final item     = _kNavItems[i];
-                      final selected = i == widget.currentIndex;
-                      return Expanded(
+                ),
+                // ── Tab items ──────────────────────────────────────────
+                Row(
+                  children: List.generate(_kNavItems.length, (i) {
+                    final item = _kNavItems[i];
+                    final selected = i == widget.currentIndex;
+                    return Expanded(
+                      child: RepaintBoundary(
                         child: GestureDetector(
                           onTap: () => _onTap(i),
                           behavior: HitTestBehavior.opaque,
@@ -390,7 +419,7 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
                             height: _kNavHeight,
                             child: Stack(
                               children: [
-                                // ── Press-shimmer flash ───────────────────
+                                // ── Press-shimmer flash ────────────────
                                 AnimatedBuilder(
                                   animation: _shimmerAnim[i],
                                   builder: (_, _) {
@@ -398,29 +427,34 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
                                     if (v == 0) return const SizedBox.shrink();
                                     return Positioned(
                                       left: (tabW - _kBubbleW) / 2,
-                                      top:  _kBubbleTop,
-                                      width:  _kBubbleW,
+                                      top: _kBubbleTop,
+                                      width: _kBubbleW,
                                       height: _kBubbleH,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                              _kBubbleH / 2),
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end:   Alignment.bottomRight,
-                                            colors: [
-                                              AppTheme.textPrimary.withValues(
-                                                  alpha: 0.38 * v),
-                                              AppTheme.textPrimary.withValues(
-                                                  alpha: 0.08 * v),
-                                            ],
+                                      child: IgnorePointer(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(
+                                                    _kBubbleH / 2),
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                AppTheme.textPrimary
+                                                    .withValues(
+                                                        alpha: 0.38 * v),
+                                                AppTheme.textPrimary
+                                                    .withValues(
+                                                        alpha: 0.08 * v),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     );
                                   },
                                 ),
-                                // ── Icon + label ──────────────────────────
+                                // ── Icon + label ───────────────────────
                                 Align(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
@@ -462,15 +496,15 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
                             ),
                           ),
                         ),
-                      );
-                    }),
-                  ),
-                ],
-              ),
+                      ),
+                    );
+                  }),
+                ),
+              ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
