@@ -111,10 +111,18 @@ class _DevicePageState extends State<DevicePage> {
                 if (data.instances.isNotEmpty) ...[
                   _SectionHeader(label: 'Hyperion Instances'),
                   const SizedBox(height: 8),
+                  // Each tile in its own RepaintBoundary so a setState
+                  // anywhere on the page does not cascade into
+                  // re-rasterising the unrelated tiles' shadows.
                   ...data.instances.map(
                     (inst) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _InstanceTile(instance: inst, service: service),
+                      child: RepaintBoundary(
+                        child: _InstanceTile(
+                          instance: inst,
+                          service: service,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),

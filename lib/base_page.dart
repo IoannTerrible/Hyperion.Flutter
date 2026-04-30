@@ -21,13 +21,21 @@ class BasePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Both visual layers (gradient backdrop and rotated blurred falling
+    // light) are entirely static. Wrapping each in its own RepaintBoundary
+    // lets Flutter's raster cache promote them to textures after the first
+    // few frames — subsequent paints (page-content updates, navbar
+    // animations, etc.) just composite the cached layer instead of
+    // re-running the sigma-63 gaussian blur on every paint.
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Positioned.fill(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: gradient ?? AppTheme.defaultPageGradient,
+          child: RepaintBoundary(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: gradient ?? AppTheme.defaultPageGradient,
+              ),
             ),
           ),
         ),
@@ -36,16 +44,20 @@ class BasePage extends StatelessWidget {
           right: -80,
           width: AppTheme.fallingLightWidth,
           height: AppTheme.fallingLightHeight,
-          child: Transform.rotate(
-            angle: AppTheme.fallingLightRotationDeg * math.pi / 180,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(
-                sigmaX: AppTheme.fallingLightBlurSigma,
-                sigmaY: AppTheme.fallingLightBlurSigma,
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: AppTheme.fallingLightGradient,
+          child: RepaintBoundary(
+            child: IgnorePointer(
+              child: Transform.rotate(
+                angle: AppTheme.fallingLightRotationDeg * math.pi / 180,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: AppTheme.fallingLightBlurSigma,
+                    sigmaY: AppTheme.fallingLightBlurSigma,
+                  ),
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.fallingLightGradient,
+                    ),
+                  ),
                 ),
               ),
             ),

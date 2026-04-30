@@ -173,19 +173,26 @@ class _InstancePluginsPageState extends State<InstancePluginsPage> {
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             itemCount: plugins.length,
+            // ListView.builder is already lazy. The RepaintBoundary
+            // around each tile contains the AnimatedContainer / switch
+            // animation paints when a toggle is flipped — without it,
+            // every neighbour tile re-rasterises every frame of the
+            // 200ms toggle animation.
             itemBuilder: (_, i) {
               final plugin = plugins[i];
               final enabled = _effectiveEnabled(plugin);
               final isPending = _pending.contains(plugin.id);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _PluginTile(
-                  icon: _instancePluginIcon(plugin.icon),
-                  name: plugin.name,
-                  description: plugin.description,
-                  enabled: enabled,
-                  isPending: isPending,
-                  onChanged: (v) => _toggle(plugin, v),
+                child: RepaintBoundary(
+                  child: _PluginTile(
+                    icon: _instancePluginIcon(plugin.icon),
+                    name: plugin.name,
+                    description: plugin.description,
+                    enabled: enabled,
+                    isPending: isPending,
+                    onChanged: (v) => _toggle(plugin, v),
+                  ),
                 ),
               );
             },

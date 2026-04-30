@@ -211,8 +211,8 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
     if (menuItem.key == 'quit') exit(0);
   }
 
-  final titles = ['Devices', 'Plugins', 'Profile'];
-  late final List<Widget> _pages = const [
+  static const _titles = ['Devices', 'Plugins', 'Profile'];
+  static const List<Widget> _pages = [
     DevicePage(),
     PluginsPage(),
     ProfilePage(),
@@ -225,7 +225,7 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
         backgroundColor: AppTheme.surface,
         foregroundColor: AppTheme.textPrimary,
         title: Text(
-          titles[_currentIndex],
+          _titles[_currentIndex],
           style: TextStyle(
             color: AppTheme.textPrimary,
             fontSize: 20,
@@ -234,13 +234,68 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
         ),
       ),
       backgroundColor: AppTheme.background,
-      body: _pages[_currentIndex],
+      // Lazy IndexedStack: each tab is mounted only the first time it is
+      // visited and stays alive afterwards. Tab swaps then become a pure
+      // visibility toggle — no widget remount, no FutureBuilder re-fire,
+      // no first-paint of BasePage's blurred falling-light. This is what
+      // eliminates the 100–240ms raster spikes seen on tab switches in
+      // the DevTools traces.
+      body: _LazyIndexedStack(
+        index: _currentIndex,
+        children: _pages,
+      ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: _LiquidGlassNavBar(
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
         ),
+      ),
+    );
+  }
+}
+
+/// IndexedStack variant that defers building each child until the first
+/// time its index is selected. Once built, a child stays in the tree so
+/// its State, scroll positions, and futures survive future tab switches.
+class _LazyIndexedStack extends StatefulWidget {
+  const _LazyIndexedStack({required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<_LazyIndexedStack> createState() => _LazyIndexedStackState();
+}
+
+class _LazyIndexedStackState extends State<_LazyIndexedStack> {
+  late final List<bool> _activated =
+      List<bool>.filled(widget.children.length, false);
+
+  @override
+  void initState() {
+    super.initState();
+    _activated[widget.index] = true;
+  }
+
+  @override
+  void didUpdateWidget(_LazyIndexedStack old) {
+    super.didUpdateWidget(old);
+    if (widget.index != old.index) {
+      _activated[widget.index] = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IndexedStack(
+      index: widget.index,
+      sizing: StackFit.expand,
+      children: List<Widget>.generate(
+        widget.children.length,
+        (i) => _activated[i]
+            ? widget.children[i]
+            : const SizedBox.shrink(),
       ),
     );
   }
