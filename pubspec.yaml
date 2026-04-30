@@ -72,7 +72,7 @@ flutter:
     - lib/auth_logo.png
     - lib/user_edit.png
     - lib/HandFace.png
-    - appIcons/buttonClickSound.mp3
+    - assets/audio/buttonClickSound.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

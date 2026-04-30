@@ -14,7 +14,7 @@ class SoundService {
   Future<void> init() async {
     try {
       // Pre-load asset so first tap has no perceptible delay.
-      await _player.setSource(AssetSource('appIcons/buttonClickSound.mp3'));
+      await _player.setSource(AssetSource('audio/buttonClickSound.mp3'));
       await _player.setReleaseMode(ReleaseMode.stop);
       _ready = true;
       AppLogger.log('[SoundService] initialized');
@@ -29,6 +29,6 @@ class SoundService {
     // Use play() rather than seek+resume.
     // On Windows (and after ReleaseMode.stop on all platforms) the player is
     // in a truly stopped state — resume() won't restart it, but play() will.
-    _player.play(AssetSource('appIcons/buttonClickSound.mp3'));
+    _player.play(AssetSource('audio/buttonClickSound.mp3'));
   }
 }
