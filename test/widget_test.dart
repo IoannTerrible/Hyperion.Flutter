@@ -10,10 +10,35 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hyperion_flutter/auth/auth_notifier.dart';
 import 'package:hyperion_flutter/auth/auth_service.dart';
+import 'package:hyperion_flutter/biometric/biometric_notifier.dart';
+import 'package:hyperion_flutter/biometric/biometric_service.dart';
 import 'package:hyperion_flutter/config/api_config.dart';
 import 'package:hyperion_flutter/devices/devices_service.dart';
 import 'package:hyperion_flutter/main.dart';
 import 'package:hyperion_flutter/plugins/plugin_settings.dart';
+
+class _FakeBiometricService implements BiometricService {
+  @override
+  Future<bool> isAvailable() async => false;
+  @override
+  Future<List<String>> availableTypes() async => [];
+  @override
+  Future<bool> authenticate({String reason = ''}) async => false;
+  @override
+  Future<bool> isEnabled() async => false;
+  @override
+  Future<void> setEnabled(bool value) async {}
+  @override
+  Future<List<String>> getSavedAccounts() async => [];
+  @override
+  Future<void> saveCredentials(String usernameOrEmail, String password) async {}
+  @override
+  Future<({String usernameOrEmail, String password})?> getCredentialsForAccount(String usernameOrEmail) async => null;
+  @override
+  Future<void> removeAccount(String usernameOrEmail) async {}
+  @override
+  Future<void> clearCredentials() async {}
+}
 
 class _FakeAuthService implements AuthService {
   @override
@@ -52,10 +77,14 @@ void main() {
       authNotifier: authNotifier,
     );
 
+    final biometricNotifier = BiometricNotifier(_FakeBiometricService());
+    await biometricNotifier.init();
+
     await tester.pumpWidget(MyApp(
       authNotifier: authNotifier,
       devicesService: devicesService,
       pluginSettings: PluginSettings(),
+      biometricNotifier: biometricNotifier,
     ));
     await tester.pumpAndSettle();
 
