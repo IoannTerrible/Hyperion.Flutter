@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:hyperion_flutter/app_theme.dart';
 import 'package:hyperion_flutter/auth/auth_notifier.dart';
@@ -236,35 +237,53 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
       body: _pages[_currentIndex],
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-          ),
-          child: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) {
-              setState(() => _currentIndex = index);
-            },
-            backgroundColor: Colors.transparent,
-            elevation: 12,
-            selectedItemColor: AppTheme.textPrimary,
-            unselectedItemColor: AppTheme.textPrimary.withValues(alpha:0.7),
-            type: BottomNavigationBarType.fixed,
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.devices),
-                label: 'Devices',
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              decoration: BoxDecoration(
+                // Dark navy tint at ~50% — lets the blurred content show through.
+                color: const Color(0xFF0D0D1B).withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                // Thin white rim — the "glass edge" specular highlight.
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  width: 0.6,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 24,
+                    spreadRadius: -4,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.cloud_circle),
-                label: 'Plugins',
+              child: BottomNavigationBar(
+                currentIndex: _currentIndex,
+                onTap: (index) => setState(() => _currentIndex = index),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                selectedItemColor: AppTheme.textPrimary,
+                unselectedItemColor: AppTheme.textPrimary.withValues(alpha: 0.5),
+                type: BottomNavigationBarType.fixed,
+                items: const [
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.devices),
+                    label: 'Devices',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.cloud_circle),
+                    label: 'Plugins',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.person_outline),
+                    label: 'Profile',
+                  ),
+                ],
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.person_outline),
-                label: 'Profile',
-              ),
-            ],
+            ),
           ),
         ),
       ),
