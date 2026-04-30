@@ -15,9 +15,49 @@ import 'package:hyperion_flutter/plugins/plugin_scope.dart';
 import 'package:hyperion_flutter/plugins/plugin_settings.dart';
 import 'package:hyperion_flutter/plugins_page.dart';
 import 'package:hyperion_flutter/profile_page.dart';
+import 'package:hyperion_flutter/sound/sound_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tray_manager/tray_manager.dart';
+
+// ---------------------------------------------------------------------------
+// Hooks into the Material ink system so every InkWell / button tap plays a
+// click sound. Visual splash is delegated to [_inner] unchanged.
+// ---------------------------------------------------------------------------
+class _SoundSplashFactory extends InteractiveInkFeatureFactory {
+  const _SoundSplashFactory(this._inner);
+  final InteractiveInkFeatureFactory _inner;
+
+  @override
+  InteractiveInkFeature create({
+    required MaterialInkController controller,
+    required RenderBox referenceBox,
+    required Offset position,
+    required Color color,
+    required TextDirection textDirection,
+    bool containedInkWell = false,
+    RectCallback? rectCallback,
+    BorderRadius? borderRadius,
+    ShapeBorder? customBorder,
+    double? radius,
+    VoidCallback? onRemoved,
+  }) {
+    SoundService.instance.playClick();
+    return _inner.create(
+      controller: controller,
+      referenceBox: referenceBox,
+      position: position,
+      color: color,
+      textDirection: textDirection,
+      containedInkWell: containedInkWell,
+      rectCallback: rectCallback,
+      borderRadius: borderRadius,
+      customBorder: customBorder,
+      radius: radius,
+      onRemoved: onRemoved,
+    );
+  }
+}
 
 Future<void> _initTray() async {
   if (kIsWeb) return;
@@ -43,6 +83,7 @@ Future<void> _initTray() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppLogger.init();
+  await SoundService.instance.init();
   await _initTray();
 
   // Load persisted plugin preferences before the first frame.
@@ -104,7 +145,27 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'Hyperion',
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.pinkAccent,
+              brightness: Brightness.dark,
+            ),
+            // Dark background eliminates the white flash during route
+            // push transitions and on the initial frame after auth swap.
+            scaffoldBackgroundColor: AppTheme.background,
+            // Play click sound on every Material button / InkWell tap.
+            splashFactory: const _SoundSplashFactory(InkRipple.splashFactory),
+            // Consistent transitions on all platforms; they use
+            // scaffoldBackgroundColor so no white flash appears.
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: <TargetPlatform, PageTransitionsBuilder>{
+                TargetPlatform.android: ZoomPageTransitionsBuilder(),
+                TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+                TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+                TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
+              },
+            ),
           ),
           home: AuthGate(
             authenticatedChild: MyHomePage(title: 'Home'),

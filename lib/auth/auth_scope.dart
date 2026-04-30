@@ -37,18 +37,37 @@ class AuthGate extends StatelessWidget {
       listenable: AuthScope.of(context),
       builder: (context, _) {
         final state = AuthScope.of(context).state;
-        return switch (state) {
-          Unauthenticated() => const AuthPage(),
+
+        // ValueKeys ensure AnimatedSwitcher detects changes between states
+        // that share the same widget type (e.g. two DevicesScope variants).
+        final Widget child = switch (state) {
+          Unauthenticated() => const AuthPage(key: ValueKey('auth')),
           Authenticated() when state.isDemo => DevicesScope(
+              key: const ValueKey('home'),
               service: devicesService,
               child: authenticatedChild,
             ),
-          Authenticated() when !state.emailVerified => VerifyEmailPage(email: state.email),
+          Authenticated() when !state.emailVerified => VerifyEmailPage(
+              key: const ValueKey('verify'),
+              email: state.email,
+            ),
           Authenticated() => DevicesScope(
+              key: const ValueKey('home'),
               service: devicesService,
               child: authenticatedChild,
             ),
         };
+
+        // Fade instead of an instant cut — eliminates the white flash that
+        // appeared when the widget tree replaced AuthPage with MyHomePage.
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+          child: child,
+        );
       },
     );
   }
