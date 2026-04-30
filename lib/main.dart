@@ -237,16 +237,111 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
       body: _pages[_currentIndex],
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: ClipRRect(
+        child: _LiquidGlassNavBar(
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Liquid-glass bottom navigation bar
+// ---------------------------------------------------------------------------
+
+/// Describes a single navigation destination.
+class _NavItem {
+  const _NavItem(this.icon, this.label);
+  final IconData icon;
+  final String label;
+}
+
+const _kNavItems = [
+  _NavItem(Icons.devices,       'Devices'),
+  _NavItem(Icons.cloud_circle,  'Plugins'),
+  _NavItem(Icons.person_outline,'Profile'),
+];
+
+/// Fixed dimensions — keeps layout maths out of the build method.
+const double _kNavHeight  = 64.0;
+const double _kBubbleW    = 52.0;
+const double _kBubbleH    = 34.0;
+/// Vertical offset from the top of the bar to the top of the bubble.
+/// Chosen so the bubble is centred on the icon row (icon 22 px + label).
+const double _kBubbleTop  = 7.0;
+
+class _LiquidGlassNavBar extends StatefulWidget {
+  const _LiquidGlassNavBar({
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  @override
+  State<_LiquidGlassNavBar> createState() => _LiquidGlassNavBarState();
+}
+
+class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
+    with TickerProviderStateMixin {
+  /// One short-lived controller per tab drives the press-shimmer flash.
+  late final List<AnimationController> _shimmerCtrls;
+  late final List<Animation<double>> _shimmerAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerCtrls = List.generate(
+      _kNavItems.length,
+      (_) => AnimationController(
+        vsync: this,
+        // Total round-trip: 80 ms forward + 120 ms reverse = 200 ms.
+        duration: const Duration(milliseconds: 80),
+        reverseDuration: const Duration(milliseconds: 120),
+      ),
+    );
+    _shimmerAnim = _shimmerCtrls
+        .map((c) => Tween<double>(begin: 0, end: 1).animate(
+              CurvedAnimation(parent: c, curve: Curves.easeOut)))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _shimmerCtrls) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _onTap(int index) {
+    // Fire shimmer: ramp up, then fade out automatically.
+    _shimmerCtrls[index]
+      ..stop()
+      ..forward(from: 0).then((_) => _shimmerCtrls[index].reverse());
+    widget.onTap(index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tabW      = constraints.maxWidth / _kNavItems.length;
+        final bubbleLeft = widget.currentIndex * tabW + (tabW - _kBubbleW) / 2;
+
+        return ClipRRect(
           borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
+              height: _kNavHeight,
               decoration: BoxDecoration(
-                // App background tint at ~55% — lets the blurred content show through.
-                color: AppTheme.background.withValues(alpha: 0.55),
+                // Grey surface tint — same family as the old solid bar, but
+                // translucent so the blur shows through.
+                color: AppTheme.surface.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-                // Thin rim using textPrimary (white) — the glass edge highlight.
                 border: Border.all(
                   color: AppTheme.textPrimary.withValues(alpha: 0.14),
                   width: 0.6,
@@ -260,33 +355,122 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
                   ),
                 ],
               ),
-              child: BottomNavigationBar(
-                currentIndex: _currentIndex,
-                onTap: (index) => setState(() => _currentIndex = index),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                selectedItemColor: AppTheme.textPrimary,
-                unselectedItemColor: AppTheme.textPrimary.withValues(alpha: 0.5),
-                type: BottomNavigationBarType.fixed,
-                items: const [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.devices),
-                    label: 'Devices',
+              child: Stack(
+                children: [
+                  // ── Sliding selection bubble ──────────────────────────────
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeOutBack,
+                    left: bubbleLeft,
+                    top: _kBubbleTop,
+                    width: _kBubbleW,
+                    height: _kBubbleH,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        // Subtle surfaceSelected tint — glass-on-glass, not solid.
+                        color: AppTheme.surfaceSelected.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(_kBubbleH / 2),
+                        border: Border.all(
+                          color: AppTheme.textPrimary.withValues(alpha: 0.18),
+                          width: 0.5,
+                        ),
+                      ),
+                    ),
                   ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.cloud_circle),
-                    label: 'Plugins',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.person_outline),
-                    label: 'Profile',
+                  // ── Tab items ─────────────────────────────────────────────
+                  Row(
+                    children: List.generate(_kNavItems.length, (i) {
+                      final item     = _kNavItems[i];
+                      final selected = i == widget.currentIndex;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => _onTap(i),
+                          behavior: HitTestBehavior.opaque,
+                          child: SizedBox(
+                            height: _kNavHeight,
+                            child: Stack(
+                              children: [
+                                // ── Press-shimmer flash ───────────────────
+                                AnimatedBuilder(
+                                  animation: _shimmerAnim[i],
+                                  builder: (_, _) {
+                                    final v = _shimmerAnim[i].value;
+                                    if (v == 0) return const SizedBox.shrink();
+                                    return Positioned(
+                                      left: (tabW - _kBubbleW) / 2,
+                                      top:  _kBubbleTop,
+                                      width:  _kBubbleW,
+                                      height: _kBubbleH,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                              _kBubbleH / 2),
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end:   Alignment.bottomRight,
+                                            colors: [
+                                              AppTheme.textPrimary.withValues(
+                                                  alpha: 0.38 * v),
+                                              AppTheme.textPrimary.withValues(
+                                                  alpha: 0.08 * v),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                // ── Icon + label ──────────────────────────
+                                Align(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      AnimatedScale(
+                                        scale: selected ? 1.10 : 1.0,
+                                        duration:
+                                            const Duration(milliseconds: 240),
+                                        curve: Curves.easeOutBack,
+                                        child: Icon(
+                                          item.icon,
+                                          size: 22,
+                                          color: selected
+                                              ? AppTheme.textPrimary
+                                              : AppTheme.textPrimary
+                                                  .withValues(alpha: 0.45),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      AnimatedDefaultTextStyle(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: selected
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                          color: selected
+                                              ? AppTheme.textPrimary
+                                              : AppTheme.textPrimary
+                                                  .withValues(alpha: 0.45),
+                                        ),
+                                        child: Text(item.label),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
