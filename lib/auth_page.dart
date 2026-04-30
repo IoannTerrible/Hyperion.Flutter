@@ -5,10 +5,21 @@ import 'package:hyperion_flutter/biometric/biometric_scope.dart';
 import 'package:hyperion_flutter/config/api_config.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 const String authLogoAsset = 'lib/auth_logo.png';
+
+List<String> _passwordErrors(String password) {
+  final p = password.trim();
+  final errs = <String>[];
+  if (p.length < 8) errs.add('At least 8 characters');
+  if (!RegExp(r'[A-Z]').hasMatch(p)) errs.add('One uppercase letter');
+  if (!RegExp(r'[a-z]').hasMatch(p)) errs.add('One lowercase letter');
+  if (!RegExp(r'\d').hasMatch(p)) errs.add('One digit');
+  return errs;
+}
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -23,16 +34,6 @@ class _AuthPageState extends State<AuthPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   late final TapGestureRecognizer _privacyPolicyTapRecognizer;
-
-  static List<String> _passwordErrors(String password) {
-    final p = password.trim();
-    final errs = <String>[];
-    if (p.length < 8) errs.add('At least 8 characters');
-    if (!RegExp(r'[A-Z]').hasMatch(p)) errs.add('One uppercase letter');
-    if (!RegExp(r'[a-z]').hasMatch(p)) errs.add('One lowercase letter');
-    if (!RegExp(r'\d').hasMatch(p)) errs.add('One digit');
-    return errs;
-  }
 
   void _showErrorSnackBarIfNeeded(String? lastError) {
     if (lastError == null) {
@@ -507,11 +508,6 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   void _showForgotPasswordSheet(BuildContext context) {
-    final client = http.Client();
-    final emailCtrl = TextEditingController(text: _emailController.text.trim());
-    final codeCtrl = TextEditingController();
-    final pwCtrl = TextEditingController();
-
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -519,305 +515,8 @@ class _AuthPageState extends State<AuthPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusCard)),
       ),
-      builder: (sheetCtx) {
-        var step = 0; // 0=email, 1=code, 2=newPassword
-        var loading = false;
-        String? error;
-        String? resetToken;
-        var obscurePw = true;
-
-        return StatefulBuilder(
-          builder: (sheetCtx, setS) {
-            Future<void> sendCode() async {
-              setS(() { loading = true; error = null; });
-              try {
-                await postForgotPassword(
-                  client,
-                  ApiConfig.authBaseUrl,
-                  emailCtrl.text.trim(),
-                  fallbackBaseUrl: ApiConfig.authFallbackUrl,
-                );
-                setS(() { step = 1; loading = false; });
-              } on AuthApiException catch (e) {
-                setS(() { error = e.message; loading = false; });
-              } catch (_) {
-                setS(() { error = 'Connection failed. Check your network.'; loading = false; });
-              }
-            }
-
-            Future<void> verifyCode() async {
-              setS(() { loading = true; error = null; });
-              try {
-                resetToken = await postVerifyResetCode(
-                  client,
-                  ApiConfig.authBaseUrl,
-                  emailCtrl.text.trim(),
-                  codeCtrl.text.trim(),
-                  fallbackBaseUrl: ApiConfig.authFallbackUrl,
-                );
-                setS(() { step = 2; loading = false; });
-              } on AuthApiException catch (e) {
-                setS(() { error = e.message; loading = false; });
-              } catch (_) {
-                setS(() { error = 'Connection failed. Check your network.'; loading = false; });
-              }
-            }
-
-            Future<void> resetPassword() async {
-              final token = resetToken;
-              if (token == null) return;
-              setS(() { loading = true; error = null; });
-              try {
-                await postResetPassword(
-                  client,
-                  ApiConfig.authBaseUrl,
-                  token,
-                  pwCtrl.text,
-                  fallbackBaseUrl: ApiConfig.authFallbackUrl,
-                );
-                if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(
-                      'Password reset successfully. Please sign in.',
-                      style: const TextStyle(color: AppTheme.textPrimary),
-                    ),
-                    backgroundColor: AppTheme.statusOnline.withValues(alpha:0.8),
-                    behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.all(16),
-                    duration: const Duration(seconds: 4),
-                  ));
-                }
-              } on AuthApiException catch (e) {
-                setS(() { error = e.message; loading = false; });
-              } catch (_) {
-                setS(() { error = 'Connection failed. Check your network.'; loading = false; });
-              }
-            }
-
-            final inputDecoration = InputDecoration(
-              filled: true,
-              fillColor: AppTheme.inputBackground,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusItem),
-                borderSide: const BorderSide(color: AppTheme.inputBorder),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusItem),
-                borderSide: const BorderSide(color: AppTheme.inputBorder),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusItem),
-                borderSide: BorderSide(color: AppTheme.accentLink, width: 1.5),
-              ),
-            );
-
-            final titles = ['Reset Password', 'Enter Code', 'New Password'];
-            final subtitles = [
-              'Enter your account email to receive a reset code.',
-              'We sent a 6-digit code to ${emailCtrl.text.trim()}.',
-              'Choose a strong new password for your account.',
-            ];
-            final pwErrors = step == 2 ? _passwordErrors(pwCtrl.text) : <String>[];
-
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Progress bar
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: (step + 1) / 3,
-                        backgroundColor: AppTheme.inputBorder.withValues(alpha:0.3),
-                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentLink),
-                        minHeight: 4,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      titles[step],
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitles[step],
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // --- Step 0: Email ---
-                    if (step == 0) ...[
-                      TextField(
-                        controller: emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        onChanged: (_) => setS(() {}),
-                        style: TextStyle(color: AppTheme.inputText, fontSize: 16),
-                        decoration: inputDecoration.copyWith(
-                          hintText: 'Email address',
-                          hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
-                          prefixIcon: Icon(Icons.mail_outline, color: AppTheme.inputText, size: 22),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      _forgotButton(
-                        label: 'Send Code',
-                        loading: loading,
-                        onPressed: emailCtrl.text.trim().isNotEmpty && !loading ? sendCode : null,
-                      ),
-
-                    // --- Step 1: Code ---
-                    ] else if (step == 1) ...[
-                      TextField(
-                        controller: codeCtrl,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        maxLength: 6,
-                        onChanged: (_) => setS(() {}),
-                        style: const TextStyle(
-                          color: AppTheme.inputText,
-                          fontSize: 30,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 10,
-                        ),
-                        decoration: inputDecoration.copyWith(
-                          counterText: '',
-                          hintText: '------',
-                          hintStyle: TextStyle(
-                            color: AppTheme.inputText.withValues(alpha:0.3),
-                            fontSize: 30,
-                            letterSpacing: 10,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      _forgotButton(
-                        label: 'Verify Code',
-                        loading: loading,
-                        onPressed: codeCtrl.text.trim().length == 6 && !loading ? verifyCode : null,
-                      ),
-                      const SizedBox(height: 14),
-                      GestureDetector(
-                        onTap: loading ? null : () async {
-                          setS(() { loading = true; error = null; });
-                          try {
-                            await postForgotPassword(
-                              client,
-                              ApiConfig.authBaseUrl,
-                              emailCtrl.text.trim(),
-                              fallbackBaseUrl: ApiConfig.authFallbackUrl,
-                            );
-                          } finally {
-                            setS(() => loading = false);
-                          }
-                        },
-                        child: Text(
-                          'Resend code',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppTheme.accentLink, fontSize: 14),
-                        ),
-                      ),
-
-                    // --- Step 2: New password ---
-                    ] else if (step == 2) ...[
-                      TextField(
-                        controller: pwCtrl,
-                        obscureText: obscurePw,
-                        onChanged: (_) => setS(() {}),
-                        style: TextStyle(color: AppTheme.inputText, fontSize: 16),
-                        decoration: inputDecoration.copyWith(
-                          hintText: 'New password',
-                          hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha:0.7)),
-                          prefixIcon: Icon(Icons.lock_outline, color: AppTheme.inputText, size: 22),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscurePw ? Icons.visibility_off : Icons.visibility,
-                              color: AppTheme.inputText,
-                              size: 22,
-                            ),
-                            onPressed: () => setS(() => obscurePw = !obscurePw),
-                          ),
-                        ),
-                      ),
-                      if (pwCtrl.text.isNotEmpty && pwErrors.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        for (final e in pwErrors)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 2),
-                            child: Text(
-                              '• $e',
-                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                            ),
-                          ),
-                      ],
-                      const SizedBox(height: 20),
-                      _forgotButton(
-                        label: 'Reset Password',
-                        loading: loading,
-                        onPressed: pwCtrl.text.isNotEmpty && pwErrors.isEmpty && !loading
-                            ? resetPassword
-                            : null,
-                      ),
-                    ],
-
-                    if (error != null) ...[
-                      const SizedBox(height: 14),
-                      Text(
-                        error!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppTheme.statusOffline, fontSize: 14),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    ).whenComplete(() {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        emailCtrl.dispose();
-        codeCtrl.dispose();
-        pwCtrl.dispose();
-        client.close();
-      });
-    });
-  }
-
-  Widget _forgotButton({
-    required String label,
-    required bool loading,
-    required VoidCallback? onPressed,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: AppTheme.buttonPrimary,
-          foregroundColor: AppTheme.textPrimary,
-          disabledBackgroundColor: AppTheme.buttonPrimary.withValues(alpha:0.5),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusButton),
-          ),
-        ),
-        child: loading
-            ? const SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.textPrimary),
-              )
-            : Text(label),
+      builder: (_) => _ResetPasswordSheet(
+        initialEmail: _emailController.text.trim(),
       ),
     );
   }
@@ -909,6 +608,427 @@ class _AuthPageState extends State<AuthPage> {
         ],
       ),
       textAlign: TextAlign.center,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reset-password bottom sheet — persists step to secure storage so users
+// who switch to their email app and return land on the right step.
+// ---------------------------------------------------------------------------
+
+class _ResetPasswordSheet extends StatefulWidget {
+  final String initialEmail;
+  const _ResetPasswordSheet({required this.initialEmail});
+
+  @override
+  State<_ResetPasswordSheet> createState() => _ResetPasswordSheetState();
+}
+
+class _ResetPasswordSheetState extends State<_ResetPasswordSheet> {
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+  static const _keyStep  = 'rp_step';
+  static const _keyEmail = 'rp_email';
+  static const _keyToken = 'rp_token';
+
+  late final http.Client              _client;
+  late final TextEditingController    _emailCtrl;
+  late final TextEditingController    _codeCtrl;
+  late final TextEditingController    _pwCtrl;
+
+  int     _step      = 0;
+  bool    _loading   = false;
+  bool    _restoring = true; // true while reading storage on first open
+  String? _error;
+  String? _resetToken;
+  bool    _obscurePw = true;
+
+  // ── lifecycle ────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _client    = http.Client();
+    _emailCtrl = TextEditingController(text: widget.initialEmail);
+    _codeCtrl  = TextEditingController();
+    _pwCtrl    = TextEditingController();
+    _loadSavedState();
+  }
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _codeCtrl.dispose();
+    _pwCtrl.dispose();
+    _client.close();
+    super.dispose();
+  }
+
+  // ── storage helpers ───────────────────────────────────────────────────────
+
+  Future<void> _loadSavedState() async {
+    final stepStr = await _storage.read(key: _keyStep);
+    if (stepStr == null) {
+      if (mounted) setState(() => _restoring = false);
+      return;
+    }
+    final savedStep  = int.tryParse(stepStr) ?? 0;
+    final savedEmail = await _storage.read(key: _keyEmail);
+    final savedToken = await _storage.read(key: _keyToken);
+    if (!mounted) return;
+    setState(() {
+      _step = savedStep;
+      if (savedEmail != null && savedEmail.isNotEmpty) _emailCtrl.text = savedEmail;
+      _resetToken = savedToken;
+      _restoring  = false;
+    });
+  }
+
+  Future<void> _saveState() async {
+    await _storage.write(key: _keyStep,  value: _step.toString());
+    await _storage.write(key: _keyEmail, value: _emailCtrl.text.trim());
+    if (_resetToken != null) {
+      await _storage.write(key: _keyToken, value: _resetToken!);
+    }
+  }
+
+  Future<void> _clearState() async {
+    await Future.wait([
+      _storage.delete(key: _keyStep),
+      _storage.delete(key: _keyEmail),
+      _storage.delete(key: _keyToken),
+    ]);
+  }
+
+  // ── actions ───────────────────────────────────────────────────────────────
+
+  Future<void> _sendCode() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      await postForgotPassword(
+        _client,
+        ApiConfig.authBaseUrl,
+        _emailCtrl.text.trim(),
+        fallbackBaseUrl: ApiConfig.authFallbackUrl,
+      );
+      setState(() { _step = 1; _loading = false; });
+      await _saveState();
+    } on AuthApiException catch (e) {
+      setState(() { _error = e.message; _loading = false; });
+    } catch (_) {
+      setState(() { _error = 'Connection failed. Check your network.'; _loading = false; });
+    }
+  }
+
+  Future<void> _verifyCode() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      _resetToken = await postVerifyResetCode(
+        _client,
+        ApiConfig.authBaseUrl,
+        _emailCtrl.text.trim(),
+        _codeCtrl.text.trim(),
+        fallbackBaseUrl: ApiConfig.authFallbackUrl,
+      );
+      setState(() { _step = 2; _loading = false; });
+      await _saveState();
+    } on AuthApiException catch (e) {
+      setState(() { _error = e.message; _loading = false; });
+    } catch (_) {
+      setState(() { _error = 'Connection failed. Check your network.'; _loading = false; });
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    final token = _resetToken;
+    if (token == null) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      await postResetPassword(
+        _client,
+        ApiConfig.authBaseUrl,
+        token,
+        _pwCtrl.text,
+        fallbackBaseUrl: ApiConfig.authFallbackUrl,
+      );
+      await _clearState();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text(
+          'Password reset successfully. Please sign in.',
+          style: TextStyle(color: AppTheme.textPrimary),
+        ),
+        backgroundColor: AppTheme.statusOnline.withValues(alpha: 0.8),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
+      ));
+      Navigator.of(context).pop();
+    } on AuthApiException catch (e) {
+      setState(() { _error = e.message; _loading = false; });
+    } catch (_) {
+      setState(() { _error = 'Connection failed. Check your network.'; _loading = false; });
+    }
+  }
+
+  Future<void> _startOver() async {
+    await _clearState();
+    setState(() {
+      _step       = 0;
+      _error      = null;
+      _resetToken = null;
+      _codeCtrl.clear();
+      _pwCtrl.clear();
+    });
+  }
+
+  // ── build ─────────────────────────────────────────────────────────────────
+
+  Widget _actionButton({
+    required String label,
+    required bool loading,
+    required VoidCallback? onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppTheme.buttonPrimary,
+          foregroundColor: AppTheme.textPrimary,
+          disabledBackgroundColor: AppTheme.buttonPrimary.withValues(alpha: 0.5),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+          ),
+        ),
+        child: loading
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.textPrimary),
+              )
+            : Text(label),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Show a brief spinner while reading storage on first open.
+    if (_restoring) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 64),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: AppTheme.inputBackground,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusItem),
+        borderSide: const BorderSide(color: AppTheme.inputBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusItem),
+        borderSide: const BorderSide(color: AppTheme.inputBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusItem),
+        borderSide: BorderSide(color: AppTheme.accentLink, width: 1.5),
+      ),
+    );
+
+    final titles    = ['Reset Password', 'Enter Code', 'New Password'];
+    final subtitles = [
+      'Enter your account email to receive a reset code.',
+      'We sent a 6-digit code to ${_emailCtrl.text.trim()}.',
+      'Choose a strong new password for your account.',
+    ];
+    final pwErrors = _step == 2 ? _passwordErrors(_pwCtrl.text) : <String>[];
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (_step + 1) / 3,
+                backgroundColor: AppTheme.inputBorder.withValues(alpha: 0.3),
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentLink),
+                minHeight: 4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title row — show "Start over" when mid-flow so users aren't
+            // stuck if they return after a token has expired.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    titles[_step],
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (_step > 0)
+                  TextButton(
+                    onPressed: _loading ? null : _startOver,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.textSecondary,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Start over', style: TextStyle(fontSize: 13)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitles[_step],
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+
+            // --- Step 0: Email ---
+            if (_step == 0) ...[
+              TextField(
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(color: AppTheme.inputText, fontSize: 16),
+                decoration: inputDecoration.copyWith(
+                  hintText: 'Email address',
+                  hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha: 0.7)),
+                  prefixIcon: Icon(Icons.mail_outline, color: AppTheme.inputText, size: 22),
+                ),
+              ),
+              const SizedBox(height: 20),
+              _actionButton(
+                label: 'Send Code',
+                loading: _loading,
+                onPressed: _emailCtrl.text.trim().isNotEmpty && !_loading ? _sendCode : null,
+              ),
+
+            // --- Step 1: Code ---
+            ] else if (_step == 1) ...[
+              TextField(
+                controller: _codeCtrl,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                maxLength: 6,
+                onChanged: (_) => setState(() {}),
+                style: const TextStyle(
+                  color: AppTheme.inputText,
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 10,
+                ),
+                decoration: inputDecoration.copyWith(
+                  counterText: '',
+                  hintText: '------',
+                  hintStyle: TextStyle(
+                    color: AppTheme.inputText.withValues(alpha: 0.3),
+                    fontSize: 30,
+                    letterSpacing: 10,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              _actionButton(
+                label: 'Verify Code',
+                loading: _loading,
+                onPressed: _codeCtrl.text.trim().length == 6 && !_loading ? _verifyCode : null,
+              ),
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: _loading ? null : () async {
+                  setState(() { _loading = true; _error = null; });
+                  try {
+                    await postForgotPassword(
+                      _client,
+                      ApiConfig.authBaseUrl,
+                      _emailCtrl.text.trim(),
+                      fallbackBaseUrl: ApiConfig.authFallbackUrl,
+                    );
+                  } finally {
+                    if (mounted) setState(() => _loading = false);
+                  }
+                },
+                child: Text(
+                  'Resend code',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.accentLink, fontSize: 14),
+                ),
+              ),
+
+            // --- Step 2: New password ---
+            ] else if (_step == 2) ...[
+              TextField(
+                controller: _pwCtrl,
+                obscureText: _obscurePw,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(color: AppTheme.inputText, fontSize: 16),
+                decoration: inputDecoration.copyWith(
+                  hintText: 'New password',
+                  hintStyle: TextStyle(color: AppTheme.inputText.withValues(alpha: 0.7)),
+                  prefixIcon: Icon(Icons.lock_outline, color: AppTheme.inputText, size: 22),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePw ? Icons.visibility_off : Icons.visibility,
+                      color: AppTheme.inputText,
+                      size: 22,
+                    ),
+                    onPressed: () => setState(() => _obscurePw = !_obscurePw),
+                  ),
+                ),
+              ),
+              if (_pwCtrl.text.isNotEmpty && pwErrors.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                for (final e in pwErrors)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      '• $e',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 20),
+              _actionButton(
+                label: 'Reset Password',
+                loading: _loading,
+                onPressed: _pwCtrl.text.isNotEmpty && pwErrors.isEmpty && !_loading
+                    ? _resetPassword
+                    : null,
+              ),
+            ],
+
+            if (_error != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.statusOffline, fontSize: 14),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
