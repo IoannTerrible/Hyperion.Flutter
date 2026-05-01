@@ -206,6 +206,7 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
     super.dispose();
   }
 
+
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
     if (menuItem.key == 'quit') exit(0);
@@ -245,7 +246,12 @@ class _MyHomePageState extends State<MyHomePage> with TrayListener {
         children: _pages,
       ),
       bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          16 + MediaQuery.of(context).padding.bottom,
+        ),
         child: _LiquidGlassNavBar(
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
@@ -318,13 +324,9 @@ const _kNavItems = [
   _NavItem(Icons.person_outline,'Profile'),
 ];
 
-/// Fixed dimensions — keeps layout maths out of the build method.
-const double _kNavHeight  = 64.0;
-const double _kBubbleW    = 52.0;
-const double _kBubbleH    = 34.0;
-/// Vertical offset from the top of the bar to the top of the bubble.
-/// Chosen so the bubble is centred on the icon row (icon 22 px + label).
-const double _kBubbleTop  = 7.0;
+const double _kNavHeight = 70.0;
+const double _kBubbleWidthFactor = 0.58;
+const double _kBubbleHeightFactor = 0.60;
 
 class _LiquidGlassNavBar extends StatefulWidget {
   const _LiquidGlassNavBar({
@@ -341,56 +343,79 @@ class _LiquidGlassNavBar extends StatefulWidget {
 
 class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
     with TickerProviderStateMixin {
-  /// One short-lived controller per tab drives the press-shimmer flash.
-  late final List<AnimationController> _shimmerCtrls;
-  late final List<Animation<double>> _shimmerAnim;
 
-  // Allocated once — passing a fresh ImageFilter every build forces the
-  // backdrop layer to re-evaluate its filter pipeline.
-  static final ImageFilter _kGlassBlur =
-      ImageFilter.blur(sigmaX: 12, sigmaY: 12);
+    late final AnimationController _ambientCtrl;
+    late final Animation<double> _ambientAnim;
+    late final List<AnimationController> _shimmerCtrls;
+    late final List<Animation<double>> _shimmerAnim;
 
-  @override
-  void initState() {
-    super.initState();
-    _shimmerCtrls = List.generate(
-      _kNavItems.length,
-      (_) => AnimationController(
-        vsync: this,
-        // Total round-trip: 80 ms forward + 120 ms reverse = 200 ms.
-        duration: const Duration(milliseconds: 80),
-        reverseDuration: const Duration(milliseconds: 120),
-      ),
-    );
-    _shimmerAnim = _shimmerCtrls
-        .map((c) => Tween<double>(begin: 0, end: 1).animate(
-              CurvedAnimation(parent: c, curve: Curves.easeOut)))
-        .toList();
-  }
+    static final ImageFilter _kGlassBlur =
+        ImageFilter.blur(sigmaX: 22, sigmaY: 22);
 
-  @override
-  void dispose() {
-    for (final c in _shimmerCtrls) {
-      c.dispose();
-    }
-    super.dispose();
-  }
+    static final ImageFilter _kBubbleBlur =
+        ImageFilter.blur(sigmaX: 18, sigmaY: 18);
 
   void _onTap(int index) {
-    // Fire shimmer: ramp up, then fade out automatically.
     _shimmerCtrls[index]
       ..stop()
       ..forward(from: 0).then((_) {
         if (!mounted) return;
         _shimmerCtrls[index].reverse();
       });
+
     widget.onTap(index);
   }
 
   @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(AppTheme.radiusCard);
+  void initState() {
+    super.initState();
 
+    _ambientCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4600),
+    )..repeat();
+
+    _ambientAnim = CurvedAnimation(
+      parent: _ambientCtrl,
+      curve: Curves.linear,
+    );
+
+    _shimmerCtrls = List.generate(
+      _kNavItems.length,
+      (_) => AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 140),
+        reverseDuration: const Duration(milliseconds: 240),
+      ),
+    );
+
+    _shimmerAnim = _shimmerCtrls
+        .map(
+          (c) => Tween<double>(begin: 0, end: 1).animate(
+            CurvedAnimation(
+              parent: c,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeOutQuad,
+            ),
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    _ambientCtrl.dispose();
+
+    for (final c in _shimmerCtrls) {
+      c.dispose();
+    }
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppTheme.radiusCard + 8);
     // Top-level RepaintBoundary keeps page-body repaints from also dirtying
     // the nav-bar layer. Equally important: the blur layer is a static
     // sibling at the bottom of the Stack, isolated by its own RepaintBoundary
@@ -400,9 +425,12 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
     return RepaintBoundary(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final tabW = constraints.maxWidth / _kNavItems.length;
-          final bubbleLeft =
-              widget.currentIndex * tabW + (tabW - _kBubbleW) / 2;
+         final tabW = constraints.maxWidth / _kNavItems.length;
+          final bubbleW = tabW * _kBubbleWidthFactor;
+          final bubbleH = _kNavHeight * _kBubbleHeightFactor;
+          final bubbleTop = (_kNavHeight - bubbleH) / 2 - 4;
+          final bubbleLeft = widget.currentIndex * tabW + (tabW - bubbleW) / 2;
+          final bubbleRadius = BorderRadius.circular(bubbleH / 2);
 
           return SizedBox(
             height: _kNavHeight,
@@ -410,56 +438,146 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
               children: [
                 // ── Static glass layer (blur + tint + rim + shadow) ─────
                 Positioned.fill(
-                  child: RepaintBoundary(
-                    child: ClipRRect(
-                      borderRadius: radius,
-                      child: BackdropFilter(
-                        filter: _kGlassBlur,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppTheme.surface.withValues(alpha: 0.45),
-                            borderRadius: radius,
-                            border: Border.all(
-                              color:
-                                  AppTheme.textPrimary.withValues(alpha: 0.14),
-                              width: 0.6,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    AppTheme.background.withValues(alpha: 0.6),
-                                blurRadius: 16,
-                                spreadRadius: -4,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+  child: RepaintBoundary(
+    child: ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: _kGlassBlur,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            color: AppTheme.surface.withValues(alpha: 0.24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.18),
+                AppTheme.surface.withValues(alpha: 0.24),
+                AppTheme.background.withValues(alpha: 0.22),
+              ],
+              stops: const [0.0, 0.48, 1.0],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.17),
+              width: 0.85,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withValues(alpha: 0.08),
+                blurRadius: 16,
+                spreadRadius: -10,
+                offset: const Offset(0, -4),
+              ),
+              BoxShadow(
+                color: AppTheme.background.withValues(alpha: 0.60),
+                blurRadius: 28,
+                spreadRadius: -8,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+),
+Positioned.fill(
+  child: IgnorePointer(
+    child: ClipRRect(
+      borderRadius: radius,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white.withValues(alpha: 0.20),
+              Colors.white.withValues(alpha: 0.045),
+              Colors.black.withValues(alpha: 0.12),
+            ],
+            stops: const [0.0, 0.44, 1.0],
+          ),
+        ),
+      ),
+    ),
+  ),
+),
+Positioned.fill(
+  child: IgnorePointer(
+    child: ClipRRect(
+      borderRadius: radius,
+      child: AnimatedBuilder(
+        animation: _ambientAnim,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _LiquidGlassSweepPainter(
+              progress: _ambientAnim.value,
+              color: Colors.white,
+            ),
+          );
+        },
+      ),
+    ),
+  ),
+),
                 // ── Sliding selection bubble ───────────────────────────
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeOutBack,
-                  left: bubbleLeft,
-                  top: _kBubbleTop,
-                  width: _kBubbleW,
-                  height: _kBubbleH,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceSelected.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(_kBubbleH / 2),
-                        border: Border.all(
-                          color: AppTheme.textPrimary.withValues(alpha: 0.18),
-                          width: 0.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+               AnimatedPositioned(
+  duration: const Duration(milliseconds: 410),
+  curve: Curves.easeOutBack,
+  left: bubbleLeft,
+  top: bubbleTop,
+  width: bubbleW,
+  height: bubbleH,
+  child: IgnorePointer(
+    child: ClipRRect(
+      borderRadius: bubbleRadius,
+      child: BackdropFilter(
+        filter: _kBubbleBlur,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: bubbleRadius,
+            color: AppTheme.surfaceSelected.withValues(alpha: 0.23),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.34),
+                AppTheme.surfaceSelected.withValues(alpha: 0.27),
+                AppTheme.textPrimary.withValues(alpha: 0.08),
+              ],
+              stops: const [0.0, 0.48, 1.0],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.29),
+              width: 0.95,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withValues(alpha: 0.14),
+                blurRadius: 16,
+                spreadRadius: -8,
+                offset: const Offset(0, -4),
+              ),
+              BoxShadow(
+                color: AppTheme.textPrimary.withValues(alpha: 0.10),
+                blurRadius: 18,
+                spreadRadius: -9,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.20),
+                blurRadius: 20,
+                spreadRadius: -10,
+                offset: const Offset(0, 9),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+),
                 // ── Tab items ──────────────────────────────────────────
                 Row(
                   children: List.generate(_kNavItems.length, (i) {
@@ -481,28 +599,25 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
                                     final v = _shimmerAnim[i].value;
                                     if (v == 0) return const SizedBox.shrink();
                                     return Positioned(
-                                      left: (tabW - _kBubbleW) / 2,
-                                      top: _kBubbleTop,
-                                      width: _kBubbleW,
-                                      height: _kBubbleH,
+                                      left: (tabW - bubbleW) / 2,
+                                      top: bubbleTop,
+                                      width: bubbleW,
+                                      height: bubbleH,
                                       child: IgnorePointer(
                                         child: DecoratedBox(
                                           decoration: BoxDecoration(
                                             borderRadius:
-                                                BorderRadius.circular(
-                                                    _kBubbleH / 2),
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                AppTheme.textPrimary
-                                                    .withValues(
-                                                        alpha: 0.38 * v),
-                                                AppTheme.textPrimary
-                                                    .withValues(
-                                                        alpha: 0.08 * v),
-                                              ],
-                                            ),
+                                            (bubbleRadius),
+                                           gradient: LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [
+    Colors.white.withValues(alpha: 0.46 * v),
+    Colors.white.withValues(alpha: 0.13 * v),
+    Colors.transparent,
+  ],
+  stops: const [0.0, 0.48, 1.0],
+),
                                           ),
                                         ),
                                       ),
@@ -515,7 +630,7 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       AnimatedScale(
-                                        scale: selected ? 1.10 : 1.0,
+                                        scale: selected ? 1.25 : 1.0,
                                         duration:
                                             const Duration(milliseconds: 240),
                                         curve: Curves.easeOutBack,
@@ -532,16 +647,14 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
                                       AnimatedDefaultTextStyle(
                                         duration:
                                             const Duration(milliseconds: 200),
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: selected
-                                              ? FontWeight.w600
-                                              : FontWeight.w400,
-                                          color: selected
-                                              ? AppTheme.textPrimary
-                                              : AppTheme.textPrimary
-                                                  .withValues(alpha: 0.45),
-                                        ),
+style: TextStyle(
+  fontSize: selected ? 10.4 : 10,
+  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+  letterSpacing: selected ? 0.05 : 0,
+  color: AppTheme.textPrimary.withValues(
+    alpha: selected ? 0.96 : 0.43,
+  ),
+),
                                         child: Text(item.label),
                                       ),
                                     ],
@@ -561,5 +674,89 @@ class _LiquidGlassNavBarState extends State<_LiquidGlassNavBar>
         },
       ),
     );
+  }
+}
+
+class _LiquidGlassSweepPainter extends CustomPainter {
+  const _LiquidGlassSweepPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+      final sweepW = size.width * 0.42;
+      final sweepH = size.height * 2.15;
+      final dx = -sweepW + (size.width + sweepW * 2) * progress;
+
+      final rect = Rect.fromCenter(
+        center: Offset(dx, size.height / 2),
+        width: sweepW,
+        height: sweepH,
+      );
+
+    final sweepPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Colors.transparent,
+          color.withValues(alpha: 0.00),
+          color.withValues(alpha: 0.17),
+          color.withValues(alpha: 0.035),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.27, 0.5, 0.69, 1.0],
+      ).createShader(rect);
+
+    canvas.save();
+    canvas.translate(size.width * 0.5, size.height * 0.5);
+    canvas.rotate(-0.32);
+    canvas.translate(-size.width * 0.5, -size.height * 0.5);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(999)),
+      sweepPaint,
+    );
+    canvas.restore();
+
+    final topPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          color.withValues(alpha: 0.19),
+          color.withValues(alpha: 0.045),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.42, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      topPaint,
+    );
+
+    final bottomPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          Colors.black.withValues(alpha: 0.10),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      bottomPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiquidGlassSweepPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
