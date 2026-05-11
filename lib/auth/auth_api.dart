@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:hyperion_flutter/common/network_utils.dart';
+import 'package:hyperion_flutter/logging/app_logger.dart';
 import 'package:http/http.dart' as http;
 
 // --- Request DTOs (camelCase JSON) ---
@@ -607,46 +608,49 @@ Future<GoogleSignInResult> postGoogleLogin(
   http.Client client,
   String baseUrl,
   GoogleLoginRequest request,
-) async {
-  final uri = Uri.parse('$baseUrl/api/authentication/google-login');
-  final response = await client
-      .post(uri, headers: _jsonHeaders, body: jsonEncode(request.toJson()))
-      .timeout(const Duration(seconds: 30));
-  if (response.statusCode == 200) {
-    final map = jsonDecode(response.body) as Map<String, dynamic>?;
-    return GoogleSignInResult.fromJson(map ?? {});
-  }
-  throw AuthApiException(problemDetailsDetail(response.body), statusCode: response.statusCode);
-}
+) => _postGoogle(client, '$baseUrl/api/authentication/google-login', request.toJson());
 
 Future<GoogleSignInResult> postGoogleLink(
   http.Client client,
   String baseUrl,
   GoogleLinkRequest request,
-) async {
-  final uri = Uri.parse('$baseUrl/api/authentication/google-link');
-  final response = await client
-      .post(uri, headers: _jsonHeaders, body: jsonEncode(request.toJson()))
-      .timeout(const Duration(seconds: 30));
-  if (response.statusCode == 200) {
-    final map = jsonDecode(response.body) as Map<String, dynamic>?;
-    return GoogleSignInResult.fromJson(map ?? {});
-  }
-  throw AuthApiException(problemDetailsDetail(response.body), statusCode: response.statusCode);
-}
+) => _postGoogle(client, '$baseUrl/api/authentication/google-link', request.toJson());
 
 Future<GoogleSignInResult> postGoogleCompleteRegistration(
   http.Client client,
   String baseUrl,
   GoogleCompleteRegistrationRequest request,
+) => _postGoogle(client, '$baseUrl/api/authentication/google-complete-registration', request.toJson());
+
+Future<GoogleSignInResult> _postGoogle(
+  http.Client client,
+  String url,
+  Map<String, dynamic> body,
 ) async {
-  final uri = Uri.parse('$baseUrl/api/authentication/google-complete-registration');
+  final uri = Uri.parse(url);
+  // Don't log the id_token itself — it's a credential.
+  final sanitized = Map.of(body)..remove('idToken')..remove('password');
+  AppLogger.log('[GoogleAuth] POST $uri  payload=$sanitized');
   final response = await client
-      .post(uri, headers: _jsonHeaders, body: jsonEncode(request.toJson()))
+      .post(uri, headers: _jsonHeaders, body: jsonEncode(body))
       .timeout(const Duration(seconds: 30));
+
   if (response.statusCode == 200) {
+    AppLogger.log('[GoogleAuth] <- 200 OK (${response.body.length} bytes)');
     final map = jsonDecode(response.body) as Map<String, dynamic>?;
     return GoogleSignInResult.fromJson(map ?? {});
   }
-  throw AuthApiException(problemDetailsDetail(response.body), statusCode: response.statusCode);
+
+  // Surface full diagnostic info — content-type tells us if the response came
+  // from our backend (application/problem+json) or from nginx/cloudflare (text/html).
+  final ct = response.headers['content-type'] ?? '<no content-type>';
+  final preview = response.body.length > 500
+      ? '${response.body.substring(0, 500)}…'
+      : response.body;
+  AppLogger.log('[GoogleAuth] <- ${response.statusCode} '
+      'content-type=$ct  body=$preview');
+  throw AuthApiException(
+    problemDetailsDetail(response.body),
+    statusCode: response.statusCode,
+  );
 }

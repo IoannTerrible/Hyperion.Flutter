@@ -19,8 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 ///   5. Exchange the auth code for `id_token` against `https://oauth2.googleapis.com/token`
 ///   6. Return the id_token
 ///
-/// Requires a "Desktop application" OAuth client in Google Cloud Console
-/// (no client_secret is sent — public clients use only PKCE).
+/// Requires a "Desktop application" OAuth client in Google Cloud Console.
 class DesktopGoogleIdTokenProvider implements GoogleIdTokenProvider {
   static const _authEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
   static const _tokenEndpoint = 'https://oauth2.googleapis.com/token';
@@ -43,6 +42,7 @@ class DesktopGoogleIdTokenProvider implements GoogleIdTokenProvider {
 
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, _redirectPort);
     final redirectUri = 'http://127.0.0.1:${server.port}';
+    AppLogger.log('[GoogleAuth] Loopback listening on $redirectUri');
 
     final verifier = _randomBase64Url(32);
     final challenge = base64UrlEncode(sha256.convert(utf8.encode(verifier)).bytes).replaceAll('=', '');
@@ -60,63 +60,129 @@ class DesktopGoogleIdTokenProvider implements GoogleIdTokenProvider {
     });
 
     final completer = Completer<String?>();
+    var callbackHandled = false;
 
     final sub = server.listen((HttpRequest req) async {
       try {
+        final path = req.uri.path;
         final params = req.uri.queryParameters;
+        final hasOauthParams = params.containsKey('code') ||
+            params.containsKey('error') ||
+            params.containsKey('state');
+
+        // Ignore everything that isn't the OAuth callback (favicon.ico, /robots.txt,
+        // browser-side prefetches, etc.). Returning 204 is cheap and won't race
+        // against the real callback for the completer.
+        if (path != '/' || !hasOauthParams) {
+          req.response.statusCode = HttpStatus.noContent;
+          await req.response.close();
+          return;
+        }
+
+        // Guard against duplicate OAuth callbacks (some browsers retry on slow networks).
+        if (callbackHandled) {
+          req.response.headers.contentType = ContentType.html;
+          req.response.write(_pageHtml('Already handled',
+              'This sign-in was already processed. You can close this tab.'));
+          await req.response.close();
+          return;
+        }
+        callbackHandled = true;
+
         final returnedState = params['state'];
         final code = params['code'];
         final error = params['error'];
 
-        // Always reply with a friendly HTML so the browser tab doesn't show a raw 200/4xx
         req.response.headers.contentType = ContentType.html;
 
         if (error != null) {
-          req.response.write(_pageHtml('Sign-in failed: $error', 'You can close this tab.'));
+          AppLogger.log('[GoogleAuth] Google returned error: $error');
+          req.response.write(_pageHtml('Sign-in failed', 'Google reported: $error'));
           await req.response.close();
           completer.complete(null);
           return;
         }
         if (returnedState != state) {
-          req.response.write(_pageHtml('State mismatch', 'Possible CSRF — please try again.'));
+          AppLogger.log('[GoogleAuth] State mismatch '
+              '(expected $state, got $returnedState)');
+          req.response.write(_pageHtml('State mismatch',
+              'Possible CSRF — please try sign-in again.'));
           await req.response.close();
           completer.complete(null);
           return;
         }
-        if (code == null) {
-          req.response.write(_pageHtml('No code returned', 'You can close this tab.'));
+        if (code == null || code.isEmpty) {
+          AppLogger.log('[GoogleAuth] No code in callback');
+          req.response.write(_pageHtml('No code returned',
+              'Google did not return an authorization code.'));
           await req.response.close();
           completer.complete(null);
           return;
         }
 
-        req.response.write(_pageHtml('Sign-in complete', 'You can close this tab and return to Hyperion.'));
-        await req.response.close();
-
-        // Exchange code → tokens
-        final tokenResponse = await http.post(
-          Uri.parse(_tokenEndpoint),
-          headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
-          body: {
-            'grant_type': 'authorization_code',
-            'client_id': clientId,
-            if (clientSecret != null && clientSecret!.isNotEmpty) 'client_secret': clientSecret!,
-            'code': code,
-            'code_verifier': verifier,
-            'redirect_uri': redirectUri,
-          },
-        );
+        // Exchange code → tokens BEFORE telling the user we're done, so that any
+        // failure (invalid_grant, network blip, etc.) surfaces in the browser tab
+        // instead of confusingly showing "Sign-in complete" with no token.
+        AppLogger.log('[GoogleAuth] Got code, exchanging for tokens...');
+        http.Response tokenResponse;
+        try {
+          tokenResponse = await http
+              .post(
+                Uri.parse(_tokenEndpoint),
+                headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: {
+                  'grant_type': 'authorization_code',
+                  'client_id': clientId,
+                  if (clientSecret != null && clientSecret!.isNotEmpty)
+                    'client_secret': clientSecret!,
+                  'code': code,
+                  'code_verifier': verifier,
+                  'redirect_uri': redirectUri,
+                },
+              )
+              .timeout(const Duration(seconds: 30));
+        } catch (e) {
+          AppLogger.log('[GoogleAuth] Network error during token exchange: $e');
+          req.response.write(_pageHtml('Sign-in failed',
+              'Could not reach Google to exchange the authorization code.'));
+          await req.response.close();
+          completer.complete(null);
+          return;
+        }
 
         if (tokenResponse.statusCode != 200) {
-          AppLogger.log('[GoogleAuth] Token exchange failed: ${tokenResponse.body}');
+          AppLogger.log('[GoogleAuth] Token exchange failed '
+              '(${tokenResponse.statusCode}): ${tokenResponse.body}');
+          req.response.write(_pageHtml('Sign-in failed',
+              'Google rejected the token exchange. Check the app log for details.'));
+          await req.response.close();
           completer.complete(null);
           return;
         }
 
         final map = jsonDecode(tokenResponse.body) as Map<String, dynamic>;
-        completer.complete(map['id_token'] as String?);
-      } catch (e) {
-        AppLogger.log('[GoogleAuth] Error during loopback callback: $e');
+        final idToken = map['id_token'] as String?;
+        if (idToken == null || idToken.isEmpty) {
+          AppLogger.log('[GoogleAuth] Token response had no id_token: '
+              '${tokenResponse.body}');
+          req.response.write(_pageHtml('Sign-in failed',
+              'No id_token returned from Google.'));
+          await req.response.close();
+          completer.complete(null);
+          return;
+        }
+
+        req.response.write(_pageHtml('Sign-in complete',
+            'You can close this tab and return to Hyperion.'));
+        await req.response.close();
+        AppLogger.log('[GoogleAuth] Got id_token, completing flow');
+        completer.complete(idToken);
+      } catch (e, st) {
+        AppLogger.log('[GoogleAuth] Error during loopback callback: $e\n$st');
+        try {
+          req.response.statusCode = HttpStatus.internalServerError;
+          await req.response.close();
+        } catch (_) {}
         if (!completer.isCompleted) completer.complete(null);
       }
     });
@@ -128,7 +194,11 @@ class DesktopGoogleIdTokenProvider implements GoogleIdTokenProvider {
     }
 
     try {
-      return await completer.future.timeout(const Duration(minutes: 5), onTimeout: () => null);
+      return await completer.future
+          .timeout(const Duration(minutes: 5), onTimeout: () {
+        AppLogger.log('[GoogleAuth] Loopback callback timed out after 5 min');
+        return null;
+      });
     } finally {
       await sub.cancel();
       await server.close(force: true);
@@ -145,7 +215,7 @@ class DesktopGoogleIdTokenProvider implements GoogleIdTokenProvider {
 <!doctype html>
 <html><head><meta charset="utf-8"><title>$title</title>
 <style>body{font-family:system-ui,sans-serif;background:#1a1a1a;color:#eee;display:flex;height:100vh;margin:0;align-items:center;justify-content:center;}
-.box{text-align:center;padding:2rem;border:1px solid #333;border-radius:8px;}
+.box{text-align:center;padding:2rem;border:1px solid #333;border-radius:8px;max-width:480px;}
 h1{margin:0 0 .5rem;}</style></head>
 <body><div class="box"><h1>$title</h1><p>$message</p></div></body></html>''';
 }

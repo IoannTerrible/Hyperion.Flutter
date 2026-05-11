@@ -8,6 +8,7 @@ import 'package:hyperion_flutter/config/api_config.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -128,8 +129,6 @@ class _AuthPageState extends State<AuthPage> {
                     const SizedBox(height: 20),
                     _buildSignInButton(isLoading),
                     _buildBiometricButton(isLoading),
-                    const SizedBox(height: 12),
-                    _buildGoogleSignInButton(context, isLoading),
                     const SizedBox(height: 16),
                     _buildDemoLink(isLoading),
                     const SizedBox(height: 24),
@@ -459,41 +458,68 @@ class _AuthPageState extends State<AuthPage> {
     final notifier = AuthScope.of(context);
     final lock = notifier.lockoutRemaining;
     final locked = lock != null;
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: isLoading || locked
-            ? null
-            : () async {
-                final email = _emailController.text.trim();
-                final pw = _passwordController.text.trim();
-                await notifier.signIn(email, pw);
-                if (!mounted) return;
-                // Save credentials so the user can sign in with biometrics next time.
-                final bio = BiometricScope.maybeOf(context);
-                if (bio != null && bio.isAvailable && notifier.lastError == null) {
-                  await bio.saveCredentials(email, pw);
-                }
-              },
-        style: FilledButton.styleFrom(
-          backgroundColor: AppTheme.buttonPrimary,
-          foregroundColor: AppTheme.textPrimary,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+    return Row(
+      children: [
+        Expanded(
+          child: FilledButton(
+            onPressed: isLoading || locked
+                ? null
+                : () async {
+                    final email = _emailController.text.trim();
+                    final pw = _passwordController.text.trim();
+                    await notifier.signIn(email, pw);
+                    if (!mounted) return;
+                    // Save credentials so the user can sign in with biometrics next time.
+                    final bio = BiometricScope.maybeOf(context);
+                    if (bio != null && bio.isAvailable && notifier.lastError == null) {
+                      await bio.saveCredentials(email, pw);
+                    }
+                  },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.buttonPrimary,
+              foregroundColor: AppTheme.textPrimary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+              ),
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.textPrimary),
+                  )
+                : Text(
+                    locked
+                        ? 'Try again in ${lock.inMinutes > 0 ? '${lock.inMinutes} min' : '${lock.inSeconds}s'}'
+                        : 'Sign in',
+                  ),
           ),
         ),
-        child: isLoading
-            ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.textPrimary),
-              )
-            : Text(
-                locked
-                    ? 'Try again in ${lock.inMinutes > 0 ? '${lock.inMinutes} min' : '${lock.inSeconds}s'}'
-                    : 'Sign in',
-              ),
+        const SizedBox(width: 8),
+        _buildGoogleIconButton(isLoading || locked),
+      ],
+    );
+  }
+
+  Widget _buildGoogleIconButton(bool disabled) {
+    return OutlinedButton(
+      onPressed: disabled ? null : () => _handleGoogleSignIn(context),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.textPrimary,
+        side: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+        ),
+      ),
+      child: SvgPicture.asset(
+        'lib/google_g.svg',
+        width: 22,
+        height: 22,
+        semanticsLabel: 'Sign in with Google',
       ),
     );
   }
@@ -576,23 +602,6 @@ class _AuthPageState extends State<AuthPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildGoogleSignInButton(BuildContext context, bool isLoading) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: OutlinedButton.icon(
-        onPressed: isLoading ? null : () => _handleGoogleSignIn(context),
-        icon: const Icon(Icons.g_mobiledata, size: 28),
-        label: const Text('Sign in with Google'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppTheme.textPrimary,
-          side: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.4)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
     );
   }
 
