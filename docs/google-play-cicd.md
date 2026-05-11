@@ -4,7 +4,7 @@ Pipeline: [.github/workflows/release-google-play.yml](../.github/workflows/relea
 
 ## Trigger
 
-Runs **only** on push to the `Product` branch. Pushes to `main`, feature branches, or tags do nothing.
+Runs **only** on push to the `product` branch. Pushes to `main`, feature branches, or tags do nothing.
 
 ## What it does
 
@@ -16,7 +16,7 @@ Runs **only** on push to the `Product` branch. Pushes to `main`, feature branche
 6. Uploads the AAB to Google Play's **internal** track via `r0adkll/upload-google-play`.
 7. Creates a **lightweight** tag (`git tag v<X.Y.Z>`) and pushes it to `origin`.
 
-So: bump the version in `pubspec.yaml`, merge into `Product` → release happens, tag appears. Forget to bump → workflow runs but exits cleanly at step 3.
+So: bump the version in `pubspec.yaml`, merge into `product` → release happens, tag appears. Forget to bump → workflow runs but exits cleanly at step 3.
 
 ## Required GitHub Secrets
 
@@ -45,12 +45,12 @@ Settings → Secrets and variables → Actions → New repository secret.
 - Release notes (what-the-user-sees) are NOT uploaded from CI — fill them in manually in the Play Console, matching the `<en-US> / <ru-RU>` blocks we keep in chat.
 - The workflow uses the built-in `GITHUB_TOKEN` to push tags. No PAT needed because `permissions: contents: write` is granted at the top.
 - Lightweight tag, not annotated: `git tag v2.3.3` (no `-a`, no `-m`).
-- `concurrency: google-play-release` serialises runs, so two pushes to `Product` won't try to upload the same `versionCode` simultaneously.
+- `concurrency: google-play-release` serialises runs, so two pushes to `product` won't try to upload the same `versionCode` simultaneously.
 
 ## First-time checklist
 
-- [ ] Create the `Product` branch (`git checkout -b Product && git push -u origin Product`).
+- [ ] Create the `product` branch (`git checkout -b product && git push -u origin product`).
 - [ ] Add all 5 secrets above.
 - [ ] Make sure the **versionCode** in `pubspec.yaml` (`+N`) is **strictly greater** than the highest versionCode ever uploaded to that Play app — Google rejects re-used codes.
 - [ ] Have an initial release already created in Play Console (the API can't create the very first release; subsequent ones are fine).
-- [ ] Branch protect `Product` so only deliberate merges trigger it.
+- [ ] Branch protect `product` so only deliberate merges trigger it.
