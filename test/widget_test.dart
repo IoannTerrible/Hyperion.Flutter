@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:hyperion_flutter/auth/auth_api.dart';
 import 'package:hyperion_flutter/auth/auth_notifier.dart';
 import 'package:hyperion_flutter/auth/auth_service.dart';
 import 'package:hyperion_flutter/biometric/biometric_notifier.dart';
@@ -64,6 +65,18 @@ class _FakeAuthService implements AuthService {
 
   @override
   Future<bool> tryRefreshSession() async => false;
+
+  @override
+  Future<GoogleSignInResult> googleSignIn() async =>
+      throw UnimplementedError();
+
+  @override
+  Future<GoogleSignInResult> linkGoogleAccount(String continuationToken, String password) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<GoogleSignInResult> completeGoogleRegistration(String continuationToken, String username) async =>
+      throw UnimplementedError();
 }
 
 void main() {

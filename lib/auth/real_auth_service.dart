@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:hyperion_flutter/auth/auth_api.dart';
 import 'package:hyperion_flutter/auth/auth_state.dart';
 import 'package:hyperion_flutter/auth/auth_service.dart';
+import 'package:hyperion_flutter/auth/google/google_id_token_provider.dart';
 import 'package:hyperion_flutter/common/network_utils.dart';
 import 'package:hyperion_flutter/logging/app_logger.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,6 +30,7 @@ class RealAuthService implements AuthService {
   final String baseUrl;
   final String fallbackBaseUrl;
   final void Function(AuthState) onStateChanged;
+  final GoogleIdTokenProvider? googleProvider;
   final http.Client _client = http.Client();
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -38,6 +40,7 @@ class RealAuthService implements AuthService {
     required this.baseUrl,
     required this.fallbackBaseUrl,
     required this.onStateChanged,
+    this.googleProvider,
   });
 
   Future<String> _getOrCreateDeviceId() async {
@@ -300,5 +303,112 @@ class RealAuthService implements AuthService {
   @override
   Future<String?> getToken() async {
     return _storage.read(key: _keyToken);
+  }
+
+  // ── Google sign-in ───────────────────────────────────────────────────────
+
+  Future<String> _resolveDeviceType() async {
+    // The desktop build runs on Windows/Linux/macOS, mobile on Android/iOS.
+    // The backend just persists this string — we use Phone everywhere on this client.
+    return 'Phone';
+  }
+
+  Future<GoogleSignInResult> _callPostGoogleLogin(GoogleLoginRequest req) async {
+    try {
+      return await postGoogleLogin(_client, baseUrl, req);
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await postGoogleLogin(_client, fallbackBaseUrl, req);
+      }
+      rethrow;
+    }
+  }
+
+  Future<GoogleSignInResult> _callPostGoogleLink(GoogleLinkRequest req) async {
+    try {
+      return await postGoogleLink(_client, baseUrl, req);
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await postGoogleLink(_client, fallbackBaseUrl, req);
+      }
+      rethrow;
+    }
+  }
+
+  Future<GoogleSignInResult> _callPostGoogleComplete(GoogleCompleteRegistrationRequest req) async {
+    try {
+      return await postGoogleCompleteRegistration(_client, baseUrl, req);
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await postGoogleCompleteRegistration(_client, fallbackBaseUrl, req);
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<GoogleSignInResult> googleSignIn() async {
+    if (googleProvider == null || !googleProvider!.isAvailable) {
+      throw AuthApiException('Google sign-in is not configured on this platform');
+    }
+
+    final idToken = await googleProvider!.obtainIdToken();
+    if (idToken == null || idToken.isEmpty) {
+      throw AuthApiException('Google sign-in cancelled');
+    }
+
+    final deviceId = await _getOrCreateDeviceId();
+    final deviceType = await _resolveDeviceType();
+    final result = await _callPostGoogleLogin(GoogleLoginRequest(
+      idToken: idToken,
+      deviceType: deviceType,
+      deviceId: deviceId,
+    ));
+
+    if (result.status == GoogleSignInStatus.success) {
+      await _finalizeAuthenticated(result.authentication!);
+    }
+    return result;
+  }
+
+  @override
+  Future<GoogleSignInResult> linkGoogleAccount(String continuationToken, String password) async {
+    final deviceId = await _getOrCreateDeviceId();
+    final deviceType = await _resolveDeviceType();
+    final result = await _callPostGoogleLink(GoogleLinkRequest(
+      continuationToken: continuationToken,
+      password: password,
+      deviceType: deviceType,
+      deviceId: deviceId,
+    ));
+
+    if (result.status == GoogleSignInStatus.success && result.authentication != null) {
+      await _finalizeAuthenticated(result.authentication!);
+    }
+    return result;
+  }
+
+  @override
+  Future<GoogleSignInResult> completeGoogleRegistration(String continuationToken, String username) async {
+    final deviceId = await _getOrCreateDeviceId();
+    final deviceType = await _resolveDeviceType();
+    final result = await _callPostGoogleComplete(GoogleCompleteRegistrationRequest(
+      continuationToken: continuationToken,
+      username: username,
+      deviceType: deviceType,
+      deviceId: deviceId,
+    ));
+
+    if (result.status == GoogleSignInStatus.success && result.authentication != null) {
+      await _finalizeAuthenticated(result.authentication!);
+    }
+    return result;
+  }
+
+  Future<void> _finalizeAuthenticated(AuthenticationResult auth) async {
+    if (!auth.isValid || auth.token == null || auth.token!.isEmpty) return;
+    await _saveAuth(auth);
+    await _notifyFromResult(auth);
+    AppLogger.log('[Auth] Signed in via Google');
   }
 }

@@ -1,3 +1,5 @@
+import 'package:hyperion_flutter/auth/auth_api.dart';
+
 /// Contract for auth: login, register, demo, signOut, restoreSession.
 abstract class AuthService {
   /// Sign in with username or email and password.
@@ -24,4 +26,14 @@ abstract class AuthService {
 
   /// Get current token for API calls (null for demo).
   Future<String?> getToken();
+
+  /// Start a Google sign-in. Returns the server's three-state response.
+  /// Caller decides whether to follow up with [linkGoogleAccount] or [completeGoogleRegistration].
+  Future<GoogleSignInResult> googleSignIn();
+
+  /// Finish a Google sign-in for an existing password account.
+  Future<GoogleSignInResult> linkGoogleAccount(String continuationToken, String password);
+
+  /// Finish a new Google registration with a user-chosen username.
+  Future<GoogleSignInResult> completeGoogleRegistration(String continuationToken, String username);
 }

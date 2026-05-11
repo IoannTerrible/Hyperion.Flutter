@@ -25,6 +25,20 @@ class ApiConfig {
   /// Public Privacy Policy URL (no auth required).
   static const String privacyPolicyUrl = 'https://hyperion.techteastudio.cc/privacy';
 
+  // ── Google sign-in ───────────────────────────────────────────────────────
+  /// Server (Web) client id used as the audience for Android id_tokens.
+  static String get googleAndroidServerClientId =>
+      const String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID', defaultValue: '');
+
+  /// Desktop OAuth client id (loopback flow). Used on Windows/Linux/macOS.
+  static String get googleDesktopClientId =>
+      const String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID', defaultValue: '');
+
+  /// Desktop OAuth client secret. Some Google "Desktop application" clients
+  /// still require this even though they use PKCE — pass via --dart-define.
+  static String get googleDesktopClientSecret =>
+      const String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_SECRET', defaultValue: '');
+
   /// HTTP fallback for TLS/connection errors (e.g. local Docker without HTTPS).
   /// In release builds the fallback is the same as the base URL (no HTTP downgrade).
   static String get authFallbackUrl =>

@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:hyperion_flutter/app_theme.dart';
 import 'package:hyperion_flutter/auth/auth_notifier.dart';
 import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/auth/google/google_id_token_provider_factory.dart';
 import 'package:hyperion_flutter/auth/real_auth_service.dart';
 import 'package:hyperion_flutter/biometric/biometric_notifier.dart';
 import 'package:hyperion_flutter/biometric/biometric_scope.dart';
@@ -92,10 +93,19 @@ void main() async {
   await pluginSettings.loadFromStorage();
 
   late final AuthNotifier authNotifier;
+  final googleConfig = GoogleAuthConfig(
+    androidServerClientId: ApiConfig.googleAndroidServerClientId,
+    desktopClientId: ApiConfig.googleDesktopClientId,
+    desktopClientSecret: ApiConfig.googleDesktopClientSecret.isEmpty
+        ? null
+        : ApiConfig.googleDesktopClientSecret,
+  );
+  final googleProvider = GoogleIdTokenProviderFactory.create(googleConfig);
   final authService = RealAuthService(
     baseUrl: ApiConfig.authBaseUrl,
     fallbackBaseUrl: ApiConfig.authFallbackUrl,
     onStateChanged: (state) => authNotifier.replaceState(state),
+    googleProvider: googleProvider,
   );
   authNotifier = AuthNotifier(authService);
   try {

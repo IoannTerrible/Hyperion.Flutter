@@ -495,3 +495,158 @@ class AuthApiException implements Exception {
   @override
   String toString() => message;
 }
+
+// ─── Google sign-in ────────────────────────────────────────────────────────
+
+enum GoogleSignInStatus {
+  success,
+  accountExistsRequiresPassword,
+  registrationRequiresUsername,
+}
+
+GoogleSignInStatus _statusFromInt(int? v) {
+  switch (v) {
+    case 1:
+      return GoogleSignInStatus.accountExistsRequiresPassword;
+    case 2:
+      return GoogleSignInStatus.registrationRequiresUsername;
+    case 0:
+    default:
+      return GoogleSignInStatus.success;
+  }
+}
+
+class GoogleLoginRequest {
+  final String idToken;
+  final String deviceType;
+  final String? deviceId;
+
+  GoogleLoginRequest({required this.idToken, this.deviceType = 'Phone', this.deviceId});
+
+  Map<String, dynamic> toJson() => {
+        'idToken': idToken,
+        'deviceType': deviceType,
+        if (deviceId != null) 'deviceId': deviceId,
+      };
+}
+
+class GoogleLinkRequest {
+  final String continuationToken;
+  final String password;
+  final String deviceType;
+  final String? deviceId;
+
+  GoogleLinkRequest({
+    required this.continuationToken,
+    required this.password,
+    this.deviceType = 'Phone',
+    this.deviceId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'continuationToken': continuationToken,
+        'password': password,
+        'deviceType': deviceType,
+        if (deviceId != null) 'deviceId': deviceId,
+      };
+}
+
+class GoogleCompleteRegistrationRequest {
+  final String continuationToken;
+  final String username;
+  final String deviceType;
+  final String? deviceId;
+
+  GoogleCompleteRegistrationRequest({
+    required this.continuationToken,
+    required this.username,
+    this.deviceType = 'Phone',
+    this.deviceId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'continuationToken': continuationToken,
+        'username': username,
+        'deviceType': deviceType,
+        if (deviceId != null) 'deviceId': deviceId,
+      };
+}
+
+class GoogleSignInResult {
+  final GoogleSignInStatus status;
+  final AuthenticationResult? authentication;
+  final String? email;
+  final String? suggestedName;
+  final String? continuationToken;
+  final String? errorMessage;
+
+  GoogleSignInResult({
+    required this.status,
+    this.authentication,
+    this.email,
+    this.suggestedName,
+    this.continuationToken,
+    this.errorMessage,
+  });
+
+  factory GoogleSignInResult.fromJson(Map<String, dynamic> json) {
+    return GoogleSignInResult(
+      status: _statusFromInt(json['status'] as int?),
+      authentication: json['authentication'] != null
+          ? AuthenticationResult.fromJson(json['authentication'] as Map<String, dynamic>)
+          : null,
+      email: json['email'] as String?,
+      suggestedName: json['suggestedName'] as String?,
+      continuationToken: json['continuationToken'] as String?,
+      errorMessage: json['errorMessage'] as String?,
+    );
+  }
+}
+
+Future<GoogleSignInResult> postGoogleLogin(
+  http.Client client,
+  String baseUrl,
+  GoogleLoginRequest request,
+) async {
+  final uri = Uri.parse('$baseUrl/api/authentication/google-login');
+  final response = await client
+      .post(uri, headers: _jsonHeaders, body: jsonEncode(request.toJson()))
+      .timeout(const Duration(seconds: 30));
+  if (response.statusCode == 200) {
+    final map = jsonDecode(response.body) as Map<String, dynamic>?;
+    return GoogleSignInResult.fromJson(map ?? {});
+  }
+  throw AuthApiException(problemDetailsDetail(response.body), statusCode: response.statusCode);
+}
+
+Future<GoogleSignInResult> postGoogleLink(
+  http.Client client,
+  String baseUrl,
+  GoogleLinkRequest request,
+) async {
+  final uri = Uri.parse('$baseUrl/api/authentication/google-link');
+  final response = await client
+      .post(uri, headers: _jsonHeaders, body: jsonEncode(request.toJson()))
+      .timeout(const Duration(seconds: 30));
+  if (response.statusCode == 200) {
+    final map = jsonDecode(response.body) as Map<String, dynamic>?;
+    return GoogleSignInResult.fromJson(map ?? {});
+  }
+  throw AuthApiException(problemDetailsDetail(response.body), statusCode: response.statusCode);
+}
+
+Future<GoogleSignInResult> postGoogleCompleteRegistration(
+  http.Client client,
+  String baseUrl,
+  GoogleCompleteRegistrationRequest request,
+) async {
+  final uri = Uri.parse('$baseUrl/api/authentication/google-complete-registration');
+  final response = await client
+      .post(uri, headers: _jsonHeaders, body: jsonEncode(request.toJson()))
+      .timeout(const Duration(seconds: 30));
+  if (response.statusCode == 200) {
+    final map = jsonDecode(response.body) as Map<String, dynamic>?;
+    return GoogleSignInResult.fromJson(map ?? {});
+  }
+  throw AuthApiException(problemDetailsDetail(response.body), statusCode: response.statusCode);
+}

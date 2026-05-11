@@ -1,6 +1,8 @@
 import 'package:hyperion_flutter/app_theme.dart';
 import 'package:hyperion_flutter/auth/auth_api.dart';
 import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/auth/google_link_page.dart';
+import 'package:hyperion_flutter/auth/google_username_page.dart';
 import 'package:hyperion_flutter/biometric/biometric_scope.dart';
 import 'package:hyperion_flutter/config/api_config.dart';
 import 'package:flutter/gestures.dart';
@@ -126,6 +128,8 @@ class _AuthPageState extends State<AuthPage> {
                     const SizedBox(height: 20),
                     _buildSignInButton(isLoading),
                     _buildBiometricButton(isLoading),
+                    const SizedBox(height: 12),
+                    _buildGoogleSignInButton(context, isLoading),
                     const SizedBox(height: 16),
                     _buildDemoLink(isLoading),
                     const SizedBox(height: 24),
@@ -573,6 +577,56 @@ class _AuthPageState extends State<AuthPage> {
         ),
       ],
     );
+  }
+
+  Widget _buildGoogleSignInButton(BuildContext context, bool isLoading) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : () => _handleGoogleSignIn(context),
+        icon: const Icon(Icons.g_mobiledata, size: 28),
+        label: const Text('Sign in with Google'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.textPrimary,
+          side: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleGoogleSignIn(BuildContext context) async {
+    final notifier = AuthScope.of(context);
+    try {
+      final result = await notifier.googleSignIn();
+      if (!context.mounted) return;
+      switch (result.status) {
+        case GoogleSignInStatus.success:
+          // RealAuthService already updated the state — nothing else to do here.
+          return;
+        case GoogleSignInStatus.accountExistsRequiresPassword:
+          await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => GoogleLinkPage(
+              continuationToken: result.continuationToken ?? '',
+              email: result.email ?? '',
+            ),
+          ));
+          return;
+        case GoogleSignInStatus.registrationRequiresUsername:
+          await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => GoogleUsernamePage(
+              continuationToken: result.continuationToken ?? '',
+              email: result.email ?? '',
+              suggestedName: result.suggestedName ?? '',
+            ),
+          ));
+          return;
+      }
+    } on AuthApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Widget _buildDemoLink(bool isLoading) {

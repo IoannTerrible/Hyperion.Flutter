@@ -148,6 +148,63 @@ class AuthNotifier extends ChangeNotifier {
 
   Future<void> refreshProfile() => _service.refreshProfile();
 
+  /// Triggers a Google sign-in. Caller inspects the [GoogleSignInResult.status]
+  /// and decides next step. On Success the notifier state is updated via the
+  /// service's state callback.
+  Future<GoogleSignInResult> googleSignIn() async {
+    _lastError = null;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      return await _service.googleSignIn();
+    } on AuthApiException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
+      throw AuthApiException(_lastError!);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GoogleSignInResult> linkGoogleAccount(String continuationToken, String password) async {
+    _lastError = null;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      return await _service.linkGoogleAccount(continuationToken, password);
+    } on AuthApiException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
+      throw AuthApiException(_lastError!);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GoogleSignInResult> completeGoogleRegistration(String continuationToken, String username) async {
+    _lastError = null;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      return await _service.completeGoogleRegistration(continuationToken, username);
+    } on AuthApiException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
+      throw AuthApiException(_lastError!);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   static String _toUserFriendlyError(Object e) {
     final s = e.toString();
     if (s.contains('SocketException') ||
