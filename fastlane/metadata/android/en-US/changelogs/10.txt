@@ -1,0 +1,3 @@
+• Tap sound on every button and interactive element
+• Fixed white screen flash when navigating between screens
+• Fixed button sounds not playing on Windows

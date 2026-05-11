@@ -1,0 +1,3 @@
+• Switching tabs is now instant — pages stay loaded in the background after the first visit
+• Background effects are cached and no longer redrawn on every screen update
+• Overall smoother rendering throughout the app

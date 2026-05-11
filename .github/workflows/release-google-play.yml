@@ -1,0 +1,138 @@
+name: Release to Google Play
+
+on:
+  push:
+    branches: [Product]
+
+# Need write access to push the version tag back to the repo.
+permissions:
+  contents: write
+
+# Prevent two releases racing on the same branch.
+concurrency:
+  group: google-play-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout (full history so we can read/push tags) ────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # ── Parse version from pubspec.yaml ─────────────────────────
+      # Extracts X.Y.Z (semver) and N (build number) from
+      # `version: X.Y.Z+N` and exposes them as job outputs.
+      - name: Parse version
+        id: version
+        run: |
+          line=$(grep -E '^version:' pubspec.yaml | head -1)
+          full=$(echo "$line" | awk '{print $2}')          # e.g. 2.4.0+18
+          name=${full%%+*}                                  # 2.4.0
+          code=${full##*+}                                  # 18
+          tag="v${name}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag"   >> "$GITHUB_OUTPUT"
+          echo "Resolved version: name=$name code=$code tag=$tag"
+
+      # ── Duplicate-tag guard ─────────────────────────────────────
+      # If the tag already exists locally OR on origin, exit early
+      # without failing the workflow. This makes re-runs and
+      # forgot-to-bump pushes harmless.
+      - name: Check tag does not already exist
+        id: tag_check
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists locally — skipping release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists on origin — skipping release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Tag $tag is new — proceeding with build."
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      # ── Toolchain ───────────────────────────────────────────────
+      - name: Setup Java 17
+        if: steps.tag_check.outputs.skip == 'false'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        if: steps.tag_check.outputs.skip == 'false'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.7'
+          channel: stable
+          cache: true
+
+      # ── Android signing materials ───────────────────────────────
+      # Two secrets carry the keystore: a base64-encoded .jks blob
+      # and the three passwords/alias. We materialise them into the
+      # files Gradle expects (android/app/upload-keystore.jks and
+      # android/key.properties) only on the runner.
+      - name: Decode keystore
+        if: steps.tag_check.outputs.skip == 'false'
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
+          test -s android/app/upload-keystore.jks
+
+      - name: Write key.properties
+        if: steps.tag_check.outputs.skip == 'false'
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=upload-keystore.jks
+          EOF
+
+      # ── Build ───────────────────────────────────────────────────
+      - name: Flutter pub get
+        if: steps.tag_check.outputs.skip == 'false'
+        run: flutter pub get
+
+      - name: Build Android App Bundle
+        if: steps.tag_check.outputs.skip == 'false'
+        run: flutter build appbundle --release
+
+      # ── Upload to Google Play (internal track) ──────────────────
+      # The service-account JSON is the key tied to a Play Console
+      # service account with "Release manager" permission on the
+      # cc.techteastudio.hyperion app. The action handles AAB upload,
+      # version-code validation, and rollout to the chosen track.
+      - name: Upload AAB to Google Play
+        if: steps.tag_check.outputs.skip == 'false'
+        uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: cc.techteastudio.hyperion
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+          changesNotSentForReview: false
+
+      # ── Tag the commit ──────────────────────────────────────────
+      # Lightweight tag (no -a / -m / -s), matches the version from
+      # pubspec.yaml, pushed to origin so the release is traceable.
+      - name: Create and push lightweight tag
+        if: steps.tag_check.outputs.skip == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          git tag "$tag"
+          git push origin "$tag"
+          echo "Pushed lightweight tag $tag (build ${{ steps.version.outputs.code }})."

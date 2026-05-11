@@ -1,0 +1,2 @@
+• New bottom navigation bar with a liquid glass effect — frosted blur and a subtle rim highlight
+• Fixed audio files not loading on some devices

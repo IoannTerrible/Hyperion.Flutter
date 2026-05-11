@@ -1,0 +1,1 @@
+Navigation bar performance fix. The glass blur effect is now hardware-cached and no longer causes dropped frames during animations.

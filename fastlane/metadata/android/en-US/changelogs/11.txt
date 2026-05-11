@@ -1,0 +1,1 @@
+Profile page rebuilt from the ground up. Avatar, active sessions, and account settings are now independent sections with smoother updates.

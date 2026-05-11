@@ -1,0 +1,1 @@
+Minor visual polish on the navigation bar — colours now follow the app theme consistently.

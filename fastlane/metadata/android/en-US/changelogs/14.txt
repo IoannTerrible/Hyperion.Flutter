@@ -1,0 +1,1 @@
+Navigation bar redesigned with an animated sliding selection bubble, spring physics, and a shimmer flash on tap.

@@ -1,0 +1,1 @@
+The password reset flow now remembers your current step if you switch apps and come back.
