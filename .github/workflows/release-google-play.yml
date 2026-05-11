@@ -4,9 +4,10 @@ on:
   push:
     branches: [product]
 
-# Need write access to push the version tag back to the repo.
+# Read-only on the repo — CI never creates or pushes tags or commits.
+# The release tag is created manually as the human authorisation step.
 permissions:
-  contents: write
+  contents: read
 
 # Prevent two releases racing on the same branch.
 concurrency:
@@ -18,79 +19,93 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── Checkout (full history so we can read/push tags) ────────
+      # ── Checkout (full history + tags so we can verify the release tag) ──
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      # ── Parse version from pubspec.yaml ─────────────────────────
-      # Extracts X.Y.Z (semver) and N (build number) from
-      # `version: X.Y.Z+N` and exposes them as job outputs.
+      # ── Parse version from pubspec.yaml ─────────────────────────────────
+      # `version: X.Y.Z+N` → name=X.Y.Z, code=N, tag=vX.Y.Z.
+      # The pubspec version is the single source of truth — duplicates and
+      # release approval are both keyed off it.
       - name: Parse version
         id: version
         run: |
           line=$(grep -E '^version:' pubspec.yaml | head -1)
-          full=$(echo "$line" | awk '{print $2}')          # e.g. 2.4.0+18
-          name=${full%%+*}                                  # 2.4.0
-          code=${full##*+}                                  # 18
+          full=$(echo "$line" | awk '{print $2}')          # 2.5.0+19
+          name=${full%%+*}                                  # 2.5.0
+          code=${full##*+}                                  # 19
           tag="v${name}"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "tag=$tag"   >> "$GITHUB_OUTPUT"
           echo "Resolved version: name=$name code=$code tag=$tag"
 
-      # ── Duplicate-tag guard ─────────────────────────────────────
-      # If the tag already exists locally OR on origin, exit early
-      # without failing the workflow. This makes re-runs and
-      # forgot-to-bump pushes harmless.
-      - name: Check tag does not already exist
-        id: tag_check
+      # ── Release gate ─────────────────────────────────────────────────────
+      # The tag vX.Y.Z must already exist for CI to release. Create it
+      # manually before pushing to `product`:
+      #     git tag v2.5.0 && git push origin v2.5.0
+      #     git push origin product
+      # If the tag is missing, the workflow ends cleanly (green run) and
+      # tells you what to do.
+      #
+      # Duplicate protection is the same gate: the tag is keyed off the
+      # pubspec version, so a re-push of `product` with the same version
+      # will hit the same tag. To actually re-release, bump the pubspec
+      # version + create a new tag. Google Play also rejects re-used
+      # versionCode at upload time as a safety net.
+      - name: Require release tag for this version
+        id: gate
         run: |
           tag="${{ steps.version.outputs.tag }}"
           if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists locally — skipping release."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "✓ Tag $tag exists locally — proceeding."
+            echo "release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists on origin — skipping release."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "✓ Tag $tag exists on origin — proceeding."
+            echo "release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "Tag $tag is new — proceeding with build."
-          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "⊘ Tag $tag is missing — skipping release."
+          echo "  To authorise this release, run:"
+          echo "      git tag $tag"
+          echo "      git push origin $tag"
+          echo "      git push origin product   # re-trigger CI"
+          echo "release=false" >> "$GITHUB_OUTPUT"
 
-      # ── Toolchain ───────────────────────────────────────────────
+      # ── Toolchain ───────────────────────────────────────────────────────
       - name: Setup Java 17
-        if: steps.tag_check.outputs.skip == 'false'
+        if: steps.gate.outputs.release == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Setup Flutter
-        if: steps.tag_check.outputs.skip == 'false'
+        if: steps.gate.outputs.release == 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.7'
           channel: stable
           cache: true
 
-      # ── Android signing materials ───────────────────────────────
-      # Two secrets carry the keystore: a base64-encoded .jks blob
-      # and the three passwords/alias. We materialise them into the
-      # files Gradle expects (android/app/upload-keystore.jks and
-      # android/key.properties) only on the runner.
+      # ── Android signing materials ───────────────────────────────────────
+      # Two secrets carry the keystore: a base64-encoded .jks blob and the
+      # three passwords/alias. They are materialised into the files Gradle
+      # expects (android/app/upload-keystore.jks and android/key.properties)
+      # only on the runner — never in the repo.
       - name: Decode keystore
-        if: steps.tag_check.outputs.skip == 'false'
+        if: steps.gate.outputs.release == 'true'
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
           test -s android/app/upload-keystore.jks
 
       - name: Write key.properties
-        if: steps.tag_check.outputs.skip == 'false'
+        if: steps.gate.outputs.release == 'true'
         run: |
           cat > android/key.properties <<EOF
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -99,22 +114,22 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
-      # ── Build ───────────────────────────────────────────────────
+      # ── Build ───────────────────────────────────────────────────────────
       - name: Flutter pub get
-        if: steps.tag_check.outputs.skip == 'false'
+        if: steps.gate.outputs.release == 'true'
         run: flutter pub get
 
       - name: Build Android App Bundle
-        if: steps.tag_check.outputs.skip == 'false'
+        if: steps.gate.outputs.release == 'true'
         run: flutter build appbundle --release
 
-      # ── Upload to Google Play (internal track) ──────────────────
-      # The service-account JSON is the key tied to a Play Console
-      # service account with "Release manager" permission on the
-      # cc.techteastudio.hyperion app. The action handles AAB upload,
-      # version-code validation, and rollout to the chosen track.
+      # ── Upload to Google Play (internal track) ─────────────────────────
+      # The service-account JSON authenticates the Play Console API. The
+      # action validates the AAB, the versionCode, and rolls out to the
+      # chosen track. Google rejects re-used versionCode at this step, so
+      # an accidental re-push with the same version errors out loudly.
       - name: Upload AAB to Google Play
-        if: steps.tag_check.outputs.skip == 'false'
+        if: steps.gate.outputs.release == 'true'
         uses: r0adkll/upload-google-play@v1.1.3
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -123,16 +138,3 @@ jobs:
           track: internal
           status: completed
           changesNotSentForReview: false
-
-      # ── Tag the commit ──────────────────────────────────────────
-      # Lightweight tag (no -a / -m / -s), matches the version from
-      # pubspec.yaml, pushed to origin so the release is traceable.
-      - name: Create and push lightweight tag
-        if: steps.tag_check.outputs.skip == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag="${{ steps.version.outputs.tag }}"
-          git tag "$tag"
-          git push origin "$tag"
-          echo "Pushed lightweight tag $tag (build ${{ steps.version.outputs.code }})."
