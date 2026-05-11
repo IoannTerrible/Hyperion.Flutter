@@ -119,9 +119,21 @@ jobs:
         if: steps.gate.outputs.release == 'true'
         run: flutter pub get
 
+      # Build-time configuration. None of these are secrets:
+      # - The three base URLs are the production hostnames; visible to anyone
+      #   running the app or inspecting network traffic.
+      # - GOOGLE_SERVER_CLIENT_ID is the Web OAuth Client ID used as the
+      #   audience for Android Google Sign-In tokens; baked into every APK
+      #   on Google Play, so not sensitive.
+      # If any of these change, edit this step.
       - name: Build Android App Bundle
         if: steps.gate.outputs.release == 'true'
-        run: flutter build appbundle --release
+        run: |
+          flutter build appbundle --release \
+            --dart-define=AUTH_BASE_URL=https://hyperion.techteastudio.cc/auth \
+            --dart-define=DEVICES_BASE_URL=https://hyperion.techteastudio.cc/mobileapi \
+            --dart-define=PLUGIN_BASE_URL=https://hyperion.techteastudio.cc/plugins \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=81331557285-56ae0lrdt0qv73eaitvonp8cfausu5gi.apps.googleusercontent.com
 
       # ── Upload to Google Play (internal track) ─────────────────────────
       # The service-account JSON authenticates the Play Console API. The
