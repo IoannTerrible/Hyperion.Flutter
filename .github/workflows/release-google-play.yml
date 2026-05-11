@@ -2,7 +2,7 @@ name: Release to Google Play
 
 on:
   push:
-    branches: [Product]
+    branches: [product]
 
 # Need write access to push the version tag back to the repo.
 permissions:
