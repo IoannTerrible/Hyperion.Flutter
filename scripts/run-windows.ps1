@@ -16,7 +16,12 @@ param(
     [string]$GoogleDesktopClientId     = $env:HYPERION_GOOGLE_DESKTOP_CLIENT_ID,
     [string]$GoogleDesktopClientSecret = $env:HYPERION_GOOGLE_DESKTOP_CLIENT_SECRET,
     # ── GitHub sign-in (Windows uses loopback OAuth — no client secret required) ──
-    [string]$GitHubClientId            = $env:HYPERION_GITHUB_CLIENT_ID
+    # Defaults to the **mobile** GitHub OAuth App's client_id. NOTE: that App's
+    # registered callback is hyperion://oauth/github, NOT http://localhost:<port>/...,
+    # so desktop GitHub sign-in won't actually succeed until a dedicated **desktop**
+    # OAuth App is registered with a loopback callback. The default is here purely
+    # so the build runs everywhere consistently.
+    [string]$GitHubClientId            = $(if ($env:HYPERION_GITHUB_CLIENT_ID) { $env:HYPERION_GITHUB_CLIENT_ID } else { 'Ov23liAmJQVPvrstcSg2' })
 )
 
 # Resolve repo root so the script works no matter the cwd.

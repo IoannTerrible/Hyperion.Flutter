@@ -1,5 +1,7 @@
+import 'dart:io' show Platform;
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hyperion_flutter/auth/auth_api.dart';
 import 'package:hyperion_flutter/auth/auth_state.dart';
 import 'package:hyperion_flutter/auth/auth_service.dart';
@@ -463,10 +465,12 @@ class RealAuthService implements AuthService {
 
     final deviceId = await _getOrCreateDeviceId();
     final deviceType = await _resolveDeviceType();
+    final isMobilePlatform = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     final result = await _callPostGitHubLogin(GitHubLoginRequest(
       code: code,
       deviceType: deviceType,
       deviceId: deviceId,
+      platform: isMobilePlatform ? 'mobile' : null,
     ));
 
     if (result.status == GitHubSignInStatus.success && result.authentication != null) {

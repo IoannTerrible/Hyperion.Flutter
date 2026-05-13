@@ -125,6 +125,9 @@ jobs:
       # - GOOGLE_SERVER_CLIENT_ID is the Web OAuth Client ID used as the
       #   audience for Android Google Sign-In tokens; baked into every APK
       #   on Google Play, so not sensitive.
+      # - GITHUB_CLIENT_ID is the **mobile** GitHub OAuth App's client_id
+      #   (callback hyperion://oauth/github). The backend selects the matching
+      #   client_secret by reading `platform: "mobile"` in the request body.
       # If any of these change, edit this step.
       - name: Build Android App Bundle
         if: steps.gate.outputs.release == 'true'
@@ -133,7 +136,8 @@ jobs:
             --dart-define=AUTH_BASE_URL=https://hyperion.techteastudio.cc/auth \
             --dart-define=DEVICES_BASE_URL=https://hyperion.techteastudio.cc/mobileapi \
             --dart-define=PLUGIN_BASE_URL=https://hyperion.techteastudio.cc/plugins \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID=81331557285-56ae0lrdt0qv73eaitvonp8cfausu5gi.apps.googleusercontent.com
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=81331557285-56ae0lrdt0qv73eaitvonp8cfausu5gi.apps.googleusercontent.com \
+            --dart-define=GITHUB_CLIENT_ID=Ov23liAmJQVPvrstcSg2
 
       # ── Upload to Google Play (internal track) ─────────────────────────
       # The service-account JSON authenticates the Play Console API. The

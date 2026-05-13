@@ -17,7 +17,10 @@ param(
     # On Android the "server client id" is the **Web** Client ID — see google_sign_in docs.
     [string]$GoogleServerClientId = $env:HYPERION_GOOGLE_SERVER_CLIENT_ID,
     # GitHub OAuth App client id (no client secret on the device — backend exchanges code).
-    [string]$GitHubClientId       = $env:HYPERION_GITHUB_CLIENT_ID
+    # Default = the **mobile** GitHub OAuth App (callback hyperion://oauth/github).
+    # The Flutter client tags the login request with platform: "mobile" so the
+    # backend pairs this client_id with the matching mobile client_secret.
+    [string]$GitHubClientId       = $(if ($env:HYPERION_GITHUB_CLIENT_ID) { $env:HYPERION_GITHUB_CLIENT_ID } else { 'Ov23liAmJQVPvrstcSg2' })
 )
 
 $RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path

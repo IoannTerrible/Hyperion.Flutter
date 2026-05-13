@@ -679,13 +679,20 @@ class GitHubLoginRequest {
   final String code;
   final String deviceType;
   final String? deviceId;
+  final String? platform;
 
-  GitHubLoginRequest({required this.code, this.deviceType = 'Phone', this.deviceId});
+  GitHubLoginRequest({
+    required this.code,
+    this.deviceType = 'Phone',
+    this.deviceId,
+    this.platform,
+  });
 
   Map<String, dynamic> toJson() => {
         'code': code,
         'deviceType': deviceType,
         if (deviceId != null) 'deviceId': deviceId,
+        if (platform != null) 'platform': platform,
       };
 }
 

@@ -38,6 +38,10 @@ jobs:
       # - Three base URLs pin the production backend.
       # - GOOGLE_SERVER_CLIENT_ID is the Web OAuth Client ID used by
       #   the web Google Sign-In flow.
+      # - GITHUB_CLIENT_ID is the **web** GitHub OAuth App's client_id
+      #   (callback https://hyperion.techteastudio.cc/...). Distinct from the
+      #   mobile App — backend picks the right client_secret using the
+      #   `platform` field in the request body (omitted/null on web).
       # None of these are secrets — they ship in the resulting JS bundle.
       # If any of them change, edit this step.
       - name: Build web
@@ -46,7 +50,8 @@ jobs:
             --dart-define=AUTH_BASE_URL=https://hyperion.techteastudio.cc/auth \
             --dart-define=DEVICES_BASE_URL=https://hyperion.techteastudio.cc/mobileapi \
             --dart-define=PLUGIN_BASE_URL=https://hyperion.techteastudio.cc/plugins \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID=81331557285-56ae0lrdt0qv73eaitvonp8cfausu5gi.apps.googleusercontent.com
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=81331557285-56ae0lrdt0qv73eaitvonp8cfausu5gi.apps.googleusercontent.com \
+            --dart-define=GITHUB_CLIENT_ID=Ov23li5LUUoyIH4Xzjsb
 
       # ── Prepare Docker tags ──────────────────────────────────
       - name: Set lowercase owner

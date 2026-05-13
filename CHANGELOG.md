@@ -7,6 +7,20 @@ Versioning follows `MAJOR.MINOR.PATCH+BUILD` from `pubspec.yaml` — `+BUILD` is
 
 ---
 
+## [2.6.1+21] — 2026-05-13
+
+Mobile sign-in now uses a separate GitHub OAuth App (callback `hyperion://oauth/github`).
+Request body includes `platform: "mobile"` so the backend picks the right
+client_id / client_secret pair when exchanging the OAuth code.
+
+### Changed
+- `GitHubLoginRequest` carries `platform` field.
+- `RealAuthService.githubSignIn` sets `platform: "mobile"` on Android/iOS.
+- CI builds pass `--dart-define=GITHUB_CLIENT_ID=...` (mobile App's client_id
+  for Google Play, web App's client_id for Flutter Web).
+
+---
+
 ## [2.6.0+20] — 2026-05-13
 
 ### Added
