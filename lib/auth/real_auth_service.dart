@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:hyperion_flutter/auth/auth_api.dart';
 import 'package:hyperion_flutter/auth/auth_state.dart';
 import 'package:hyperion_flutter/auth/auth_service.dart';
+import 'package:hyperion_flutter/auth/github/github_code_provider.dart';
 import 'package:hyperion_flutter/auth/google/google_id_token_provider.dart';
 import 'package:hyperion_flutter/common/network_utils.dart';
 import 'package:hyperion_flutter/logging/app_logger.dart';
@@ -31,6 +32,7 @@ class RealAuthService implements AuthService {
   final String fallbackBaseUrl;
   final void Function(AuthState) onStateChanged;
   final GoogleIdTokenProvider? googleProvider;
+  final GitHubCodeProvider? githubProvider;
   final http.Client _client = http.Client();
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -41,6 +43,7 @@ class RealAuthService implements AuthService {
     required this.fallbackBaseUrl,
     required this.onStateChanged,
     this.googleProvider,
+    this.githubProvider,
   });
 
   Future<String> _getOrCreateDeviceId() async {
@@ -410,5 +413,106 @@ class RealAuthService implements AuthService {
     await _saveAuth(auth);
     await _notifyFromResult(auth);
     AppLogger.log('[Auth] Signed in via Google');
+  }
+
+  // ── GitHub sign-in ───────────────────────────────────────────────────────
+
+  Future<GitHubSignInResult> _callPostGitHubLogin(GitHubLoginRequest req) async {
+    try {
+      return await postGitHubLogin(_client, baseUrl, req);
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await postGitHubLogin(_client, fallbackBaseUrl, req);
+      }
+      rethrow;
+    }
+  }
+
+  Future<GitHubSignInResult> _callPostGitHubLink(GitHubLinkRequest req) async {
+    try {
+      return await postGitHubLink(_client, baseUrl, req);
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await postGitHubLink(_client, fallbackBaseUrl, req);
+      }
+      rethrow;
+    }
+  }
+
+  Future<GitHubSignInResult> _callPostGitHubComplete(GitHubCompleteRegistrationRequest req) async {
+    try {
+      return await postGitHubCompleteRegistration(_client, baseUrl, req);
+    } catch (e) {
+      if (isConnectionOrTlsError(e) && fallbackBaseUrl != baseUrl) {
+        return await postGitHubCompleteRegistration(_client, fallbackBaseUrl, req);
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<GitHubSignInResult> githubSignIn() async {
+    if (githubProvider == null || !githubProvider!.isAvailable) {
+      throw AuthApiException('GitHub sign-in is not configured on this platform');
+    }
+
+    final code = await githubProvider!.obtainCode();
+    if (code == null || code.isEmpty) {
+      throw AuthApiException('GitHub sign-in cancelled');
+    }
+
+    final deviceId = await _getOrCreateDeviceId();
+    final deviceType = await _resolveDeviceType();
+    final result = await _callPostGitHubLogin(GitHubLoginRequest(
+      code: code,
+      deviceType: deviceType,
+      deviceId: deviceId,
+    ));
+
+    if (result.status == GitHubSignInStatus.success && result.authentication != null) {
+      await _finalizeGitHubAuthenticated(result.authentication!);
+    }
+    return result;
+  }
+
+  @override
+  Future<GitHubSignInResult> linkGitHubAccount(String continuationToken, String password) async {
+    final deviceId = await _getOrCreateDeviceId();
+    final deviceType = await _resolveDeviceType();
+    final result = await _callPostGitHubLink(GitHubLinkRequest(
+      continuationToken: continuationToken,
+      password: password,
+      deviceType: deviceType,
+      deviceId: deviceId,
+    ));
+
+    if (result.status == GitHubSignInStatus.success && result.authentication != null) {
+      await _finalizeGitHubAuthenticated(result.authentication!);
+    }
+    return result;
+  }
+
+  @override
+  Future<GitHubSignInResult> completeGitHubRegistration(String continuationToken, String username) async {
+    final deviceId = await _getOrCreateDeviceId();
+    final deviceType = await _resolveDeviceType();
+    final result = await _callPostGitHubComplete(GitHubCompleteRegistrationRequest(
+      continuationToken: continuationToken,
+      username: username,
+      deviceType: deviceType,
+      deviceId: deviceId,
+    ));
+
+    if (result.status == GitHubSignInStatus.success && result.authentication != null) {
+      await _finalizeGitHubAuthenticated(result.authentication!);
+    }
+    return result;
+  }
+
+  Future<void> _finalizeGitHubAuthenticated(AuthenticationResult auth) async {
+    if (!auth.isValid || auth.token == null || auth.token!.isEmpty) return;
+    await _saveAuth(auth);
+    await _notifyFromResult(auth);
+    AppLogger.log('[Auth] Signed in via GitHub');
   }
 }

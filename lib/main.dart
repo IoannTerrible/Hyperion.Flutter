@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:hyperion_flutter/app_theme.dart';
 import 'package:hyperion_flutter/auth/auth_notifier.dart';
 import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/auth/github/github_auth_config.dart';
+import 'package:hyperion_flutter/auth/github/github_code_provider_factory.dart';
 import 'package:hyperion_flutter/auth/google/google_id_token_provider_factory.dart';
 import 'package:hyperion_flutter/auth/real_auth_service.dart';
 import 'package:hyperion_flutter/biometric/biometric_notifier.dart';
@@ -101,11 +103,14 @@ void main() async {
         : ApiConfig.googleDesktopClientSecret,
   );
   final googleProvider = GoogleIdTokenProviderFactory.create(googleConfig);
+  final githubConfig = GitHubAuthConfig(clientId: ApiConfig.githubClientId);
+  final githubProvider = createGitHubCodeProvider(githubConfig);
   final authService = RealAuthService(
     baseUrl: ApiConfig.authBaseUrl,
     fallbackBaseUrl: ApiConfig.authFallbackUrl,
     onStateChanged: (state) => authNotifier.replaceState(state),
     googleProvider: googleProvider,
+    githubProvider: githubProvider,
   );
   authNotifier = AuthNotifier(authService);
   try {

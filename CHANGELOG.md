@@ -7,6 +7,27 @@ Versioning follows `MAJOR.MINOR.PATCH+BUILD` from `pubspec.yaml` — `+BUILD` is
 
 ---
 
+## [2.6.0+20] — 2026-05-13
+
+### Added
+- **Sign in with GitHub** alongside the existing Google sign-in. On Android the flow opens the system browser via `url_launcher`, captures the redirect back to `hyperion://oauth/github` through `app_links`, and ships the authorization code to the backend. On Windows / Linux / macOS the flow uses a loopback HTTP server on `127.0.0.1:<random>`, mirroring the Google desktop pattern. The Flutter client never handles the GitHub client secret — the Hyperion backend exchanges the auth code for an access token and fetches the user profile.
+- Three-state GitHub flow matches the backend contract:
+  - **Success** → log in immediately.
+  - **Account exists, password required** → `GitHubLinkPage` asks for the existing password before linking the GitHub identity.
+  - **Registration requires username** → `GitHubUsernamePage` lets the user pick a unique username.
+- New API client methods in `lib/auth/auth_api.dart`: `postGitHubLogin`, `postGitHubLink`, `postGitHubCompleteRegistration`, plus `GitHubSignInResult` / `GitHubSignInStatus` DTOs.
+- `GitHubCodeProvider` abstraction under `lib/auth/github/` with platform implementations: `AndroidGitHubCodeProvider`, `DesktopGitHubCodeProvider`, plus a factory.
+- New `--dart-define` knob in `ApiConfig`: `GITHUB_CLIENT_ID`.
+- GitHub icon (`lib/github_mark.svg`) rendered as an `OutlinedButton` right next to the Google icon on the sign-in screen.
+
+### Changed
+- `AuthService` interface gained `githubSignIn`, `linkGitHubAccount`, `completeGitHubRegistration`. Test fakes updated.
+- `AuthNotifier` wraps each GitHub method with the same `isLoading` / `lastError` lifecycle as the Google equivalents.
+- `RealAuthService` constructor accepts an optional `GitHubCodeProvider`. Wired up in `main.dart`.
+- `scripts/run-windows.ps1` and `scripts/run-android.ps1` forward `HYPERION_GITHUB_CLIENT_ID` as `--dart-define=GITHUB_CLIENT_ID=…`.
+
+---
+
 ## [2.4.0+18] — 2026-05-11
 
 ### Added

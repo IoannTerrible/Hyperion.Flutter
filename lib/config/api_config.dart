@@ -39,6 +39,12 @@ class ApiConfig {
   static String get googleDesktopClientSecret =>
       const String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_SECRET', defaultValue: '');
 
+  // ── GitHub sign-in ───────────────────────────────────────────────────────
+  /// GitHub OAuth App client id. The backend exchanges the auth code for a
+  /// token, so the Flutter client does NOT need the client secret.
+  static String get githubClientId =>
+      const String.fromEnvironment('GITHUB_CLIENT_ID', defaultValue: '');
+
   /// HTTP fallback for TLS/connection errors (e.g. local Docker without HTTPS).
   /// In release builds the fallback is the same as the base URL (no HTTP downgrade).
   static String get authFallbackUrl =>

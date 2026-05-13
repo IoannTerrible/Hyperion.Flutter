@@ -1,6 +1,8 @@
 import 'package:hyperion_flutter/app_theme.dart';
 import 'package:hyperion_flutter/auth/auth_api.dart';
 import 'package:hyperion_flutter/auth/auth_scope.dart';
+import 'package:hyperion_flutter/auth/github_link_page.dart';
+import 'package:hyperion_flutter/auth/github_username_page.dart';
 import 'package:hyperion_flutter/auth/google_link_page.dart';
 import 'package:hyperion_flutter/auth/google_username_page.dart';
 import 'package:hyperion_flutter/biometric/biometric_scope.dart';
@@ -498,6 +500,8 @@ class _AuthPageState extends State<AuthPage> {
         ),
         const SizedBox(width: 8),
         _buildGoogleIconButton(isLoading || locked),
+        const SizedBox(width: 8),
+        _buildGitHubIconButton(isLoading || locked),
       ],
     );
   }
@@ -520,6 +524,28 @@ class _AuthPageState extends State<AuthPage> {
         width: 22,
         height: 22,
         semanticsLabel: 'Sign in with Google',
+      ),
+    );
+  }
+
+  Widget _buildGitHubIconButton(bool disabled) {
+    return OutlinedButton(
+      onPressed: disabled ? null : () => _handleGitHubSignIn(context),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.textPrimary,
+        side: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusButton),
+        ),
+      ),
+      child: SvgPicture.asset(
+        'lib/github_mark.svg',
+        width: 22,
+        height: 22,
+        semanticsLabel: 'Sign in with GitHub',
       ),
     );
   }
@@ -625,6 +651,39 @@ class _AuthPageState extends State<AuthPage> {
         case GoogleSignInStatus.registrationRequiresUsername:
           await Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => GoogleUsernamePage(
+              continuationToken: result.continuationToken ?? '',
+              email: result.email ?? '',
+              suggestedName: result.suggestedName ?? '',
+            ),
+          ));
+          return;
+      }
+    } on AuthApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _handleGitHubSignIn(BuildContext context) async {
+    final notifier = AuthScope.of(context);
+    try {
+      final result = await notifier.githubSignIn();
+      if (!context.mounted) return;
+      switch (result.status) {
+        case GitHubSignInStatus.success:
+          // RealAuthService already updated the state — nothing else to do here.
+          return;
+        case GitHubSignInStatus.accountExistsRequiresPassword:
+          await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => GitHubLinkPage(
+              continuationToken: result.continuationToken ?? '',
+              email: result.email ?? '',
+            ),
+          ));
+          return;
+        case GitHubSignInStatus.registrationRequiresUsername:
+          await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => GitHubUsernamePage(
               continuationToken: result.continuationToken ?? '',
               email: result.email ?? '',
               suggestedName: result.suggestedName ?? '',

@@ -15,7 +15,9 @@ param(
     [string]$DevicesBaseUrl = 'https://hyperion.techteastudio.cc/mobileapi',
     [string]$PluginBaseUrl  = 'https://hyperion.techteastudio.cc/plugins',
     # On Android the "server client id" is the **Web** Client ID — see google_sign_in docs.
-    [string]$GoogleServerClientId = $env:HYPERION_GOOGLE_SERVER_CLIENT_ID
+    [string]$GoogleServerClientId = $env:HYPERION_GOOGLE_SERVER_CLIENT_ID,
+    # GitHub OAuth App client id (no client secret on the device — backend exchanges code).
+    [string]$GitHubClientId       = $env:HYPERION_GITHUB_CLIENT_ID
 )
 
 $RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path
@@ -47,6 +49,9 @@ $defines = @(
 )
 if (-not [string]::IsNullOrWhiteSpace($GoogleServerClientId)) {
     $defines += "--dart-define=GOOGLE_SERVER_CLIENT_ID=$GoogleServerClientId"
+}
+if (-not [string]::IsNullOrWhiteSpace($GitHubClientId)) {
+    $defines += "--dart-define=GITHUB_CLIENT_ID=$GitHubClientId"
 }
 
 if ($Build) {

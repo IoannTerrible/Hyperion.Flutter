@@ -36,4 +36,14 @@ abstract class AuthService {
 
   /// Finish a new Google registration with a user-chosen username.
   Future<GoogleSignInResult> completeGoogleRegistration(String continuationToken, String username);
+
+  /// Start a GitHub sign-in. Returns the server's three-state response.
+  /// Caller decides whether to follow up with [linkGitHubAccount] or [completeGitHubRegistration].
+  Future<GitHubSignInResult> githubSignIn();
+
+  /// Finish a GitHub sign-in for an existing password account.
+  Future<GitHubSignInResult> linkGitHubAccount(String continuationToken, String password);
+
+  /// Finish a new GitHub registration with a user-chosen username.
+  Future<GitHubSignInResult> completeGitHubRegistration(String continuationToken, String username);
 }

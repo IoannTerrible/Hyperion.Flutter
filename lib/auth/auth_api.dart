@@ -654,3 +654,159 @@ Future<GoogleSignInResult> _postGoogle(
     statusCode: response.statusCode,
   );
 }
+
+// ─── GitHub sign-in ────────────────────────────────────────────────────────
+
+enum GitHubSignInStatus {
+  success,
+  accountExistsRequiresPassword,
+  registrationRequiresUsername,
+}
+
+GitHubSignInStatus _githubStatusFromInt(int? v) {
+  switch (v) {
+    case 1:
+      return GitHubSignInStatus.accountExistsRequiresPassword;
+    case 2:
+      return GitHubSignInStatus.registrationRequiresUsername;
+    case 0:
+    default:
+      return GitHubSignInStatus.success;
+  }
+}
+
+class GitHubLoginRequest {
+  final String code;
+  final String deviceType;
+  final String? deviceId;
+
+  GitHubLoginRequest({required this.code, this.deviceType = 'Phone', this.deviceId});
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'deviceType': deviceType,
+        if (deviceId != null) 'deviceId': deviceId,
+      };
+}
+
+class GitHubLinkRequest {
+  final String continuationToken;
+  final String password;
+  final String deviceType;
+  final String? deviceId;
+
+  GitHubLinkRequest({
+    required this.continuationToken,
+    required this.password,
+    this.deviceType = 'Phone',
+    this.deviceId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'continuationToken': continuationToken,
+        'password': password,
+        'deviceType': deviceType,
+        if (deviceId != null) 'deviceId': deviceId,
+      };
+}
+
+class GitHubCompleteRegistrationRequest {
+  final String continuationToken;
+  final String username;
+  final String deviceType;
+  final String? deviceId;
+
+  GitHubCompleteRegistrationRequest({
+    required this.continuationToken,
+    required this.username,
+    this.deviceType = 'Phone',
+    this.deviceId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'continuationToken': continuationToken,
+        'username': username,
+        'deviceType': deviceType,
+        if (deviceId != null) 'deviceId': deviceId,
+      };
+}
+
+class GitHubSignInResult {
+  final GitHubSignInStatus status;
+  final AuthenticationResult? authentication;
+  final String? email;
+  final String? suggestedName;
+  final String? continuationToken;
+  final String? errorMessage;
+
+  GitHubSignInResult({
+    required this.status,
+    this.authentication,
+    this.email,
+    this.suggestedName,
+    this.continuationToken,
+    this.errorMessage,
+  });
+
+  factory GitHubSignInResult.fromJson(Map<String, dynamic> json) {
+    return GitHubSignInResult(
+      status: _githubStatusFromInt(json['status'] as int?),
+      authentication: json['authentication'] != null
+          ? AuthenticationResult.fromJson(json['authentication'] as Map<String, dynamic>)
+          : null,
+      email: json['email'] as String?,
+      suggestedName: json['suggestedName'] as String?,
+      continuationToken: json['continuationToken'] as String?,
+      errorMessage: json['errorMessage'] as String?,
+    );
+  }
+}
+
+Future<GitHubSignInResult> postGitHubLogin(
+  http.Client client,
+  String baseUrl,
+  GitHubLoginRequest request,
+) => _postGitHub(client, '$baseUrl/api/authentication/github-login', request.toJson());
+
+Future<GitHubSignInResult> postGitHubLink(
+  http.Client client,
+  String baseUrl,
+  GitHubLinkRequest request,
+) => _postGitHub(client, '$baseUrl/api/authentication/github-link', request.toJson());
+
+Future<GitHubSignInResult> postGitHubCompleteRegistration(
+  http.Client client,
+  String baseUrl,
+  GitHubCompleteRegistrationRequest request,
+) => _postGitHub(client, '$baseUrl/api/authentication/github-complete-registration', request.toJson());
+
+Future<GitHubSignInResult> _postGitHub(
+  http.Client client,
+  String url,
+  Map<String, dynamic> body,
+) async {
+  final uri = Uri.parse(url);
+  // Don't log the auth code or password — they are credentials.
+  final sanitized = Map.of(body)..remove('code')..remove('password');
+  AppLogger.log('[GitHubAuth] POST $uri  payload=$sanitized');
+  final response = await client
+      .post(uri, headers: _jsonHeaders, body: jsonEncode(body))
+      .timeout(const Duration(seconds: 30));
+
+  if (response.statusCode == 200) {
+    AppLogger.log('[GitHubAuth] <- 200 OK (${response.body.length} bytes)');
+    final map = jsonDecode(response.body) as Map<String, dynamic>?;
+    return GitHubSignInResult.fromJson(map ?? {});
+  }
+
+  final ct = response.headers['content-type'] ?? '<no content-type>';
+  final preview = response.body.length > 500
+      ? '${response.body.substring(0, 500)}…'
+      : response.body;
+  AppLogger.log('[GitHubAuth] <- ${response.statusCode} '
+      'content-type=$ct  body=$preview');
+  throw AuthApiException(
+    problemDetailsDetail(response.body),
+    statusCode: response.statusCode,
+  );
+}

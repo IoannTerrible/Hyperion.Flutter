@@ -77,6 +77,18 @@ class _FakeAuthService implements AuthService {
   @override
   Future<GoogleSignInResult> completeGoogleRegistration(String continuationToken, String username) async =>
       throw UnimplementedError();
+
+  @override
+  Future<GitHubSignInResult> githubSignIn() async =>
+      throw UnimplementedError();
+
+  @override
+  Future<GitHubSignInResult> linkGitHubAccount(String continuationToken, String password) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<GitHubSignInResult> completeGitHubRegistration(String continuationToken, String username) async =>
+      throw UnimplementedError();
 }
 
 void main() {

@@ -205,6 +205,63 @@ class AuthNotifier extends ChangeNotifier {
     }
   }
 
+  /// Triggers a GitHub sign-in. Caller inspects the [GitHubSignInResult.status]
+  /// and decides next step. On Success the notifier state is updated via the
+  /// service's state callback.
+  Future<GitHubSignInResult> githubSignIn() async {
+    _lastError = null;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      return await _service.githubSignIn();
+    } on AuthApiException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
+      throw AuthApiException(_lastError!);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GitHubSignInResult> linkGitHubAccount(String continuationToken, String password) async {
+    _lastError = null;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      return await _service.linkGitHubAccount(continuationToken, password);
+    } on AuthApiException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
+      throw AuthApiException(_lastError!);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GitHubSignInResult> completeGitHubRegistration(String continuationToken, String username) async {
+    _lastError = null;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      return await _service.completeGitHubRegistration(continuationToken, username);
+    } on AuthApiException catch (e) {
+      _lastError = e.message;
+      rethrow;
+    } catch (e) {
+      _lastError = _toUserFriendlyError(e);
+      throw AuthApiException(_lastError!);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   static String _toUserFriendlyError(Object e) {
     final s = e.toString();
     if (s.contains('SocketException') ||

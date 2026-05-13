@@ -14,7 +14,9 @@ param(
     [string]$PluginBaseUrl   = 'https://hyperion.techteastudio.cc/plugins',
     # ── Google sign-in (Windows uses loopback OAuth — needs a Desktop client) ─────
     [string]$GoogleDesktopClientId     = $env:HYPERION_GOOGLE_DESKTOP_CLIENT_ID,
-    [string]$GoogleDesktopClientSecret = $env:HYPERION_GOOGLE_DESKTOP_CLIENT_SECRET
+    [string]$GoogleDesktopClientSecret = $env:HYPERION_GOOGLE_DESKTOP_CLIENT_SECRET,
+    # ── GitHub sign-in (Windows uses loopback OAuth — no client secret required) ──
+    [string]$GitHubClientId            = $env:HYPERION_GITHUB_CLIENT_ID
 )
 
 # Resolve repo root so the script works no matter the cwd.
@@ -59,6 +61,9 @@ if (-not [string]::IsNullOrWhiteSpace($GoogleDesktopClientId)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($GoogleDesktopClientSecret)) {
     $flags += "--dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=$GoogleDesktopClientSecret"
+}
+if (-not [string]::IsNullOrWhiteSpace($GitHubClientId)) {
+    $flags += "--dart-define=GITHUB_CLIENT_ID=$GitHubClientId"
 }
 
 if ($Release) {
